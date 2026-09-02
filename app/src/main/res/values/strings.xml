@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ATLAS</string>
+    <string name="status_system_online">SYSTEM ONLINE</string>
+    <string name="card_apps">Uygulamalar</string>
+    <string name="card_touch">Dokunmatik</string>
+    <string name="card_screen">Ekran</string>
+    <string name="card_system">Sistem</string>
+    <string name="card_ai">AI Agent</string>
+    <string name="nav_home">Ana Sayfa</string>
+    <string name="nav_control">Kontrol</string>
+    <string name="nav_ai">AI</string>
+    <string name="nav_logs">Loglar</string>
+    <string name="menu_home">Ana Sayfa</string>
+    <string name="menu_control">Kontrol Merkezi</string>
+    <string name="menu_apps">Uygulamalar</string>
+    <string name="menu_touch">Dokunmatik</string>
+    <string name="menu_screen">Ekran</string>
+    <string name="menu_system">Sistem</string>
+    <string name="menu_ai">AI Agent</string>
+    <string name="menu_logs">Loglar</string>
+    <string name="menu_settings">Ayarlar</string>
+    <string name="menu_about">Hakkında</string>
+</resources>

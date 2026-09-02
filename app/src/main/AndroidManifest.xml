@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+        <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@drawable/ic_atlas_logo"
+        android:roundIcon="@drawable/ic_atlas_logo"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.ATLAS">
+
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <activity
+            android:name=".TouchActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ScreenActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".SystemActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".AIAgentActivity"
+            android:exported="false" />
+
+        <service
+            android:name=".ScreenCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".AppsActivity"
+            android:exported="false"
+            android:label="@string/menu_apps"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".TerminalActivity"
+            android:exported="false"
+            android:label="Terminal"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="@string/menu_settings"
+            android:parentActivityName=".MainActivity" />
+
+    </application>
+
+</manifest>

@@ -1,0 +1,114 @@
+package com.atlas.app
+
+import android.os.Build
+import android.os.Bundle
+import android.view.Surface
+import android.view.WindowManager
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import com.atlas.app.databinding.ActivityScreenBinding
+
+class ScreenActivity : AppCompatActivity() {
+
+    private lateinit var binding: ActivityScreenBinding
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        binding = ActivityScreenBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        setupToolbar()
+        setupActions()
+        loadScreenInfo()
+    }
+
+    private fun setupToolbar() {
+        setSupportActionBar(binding.toolbarScreen)
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+    }
+
+    private fun setupActions() {
+        binding.btnScreenRefresh.setOnClickListener {
+            loadScreenInfo()
+        }
+
+        binding.btnScreenCapture.setOnClickListener {
+            Toast.makeText(
+                this,
+                "Ekran yakalama altyapısı sonraki aşamada eklenecek",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    private fun loadScreenInfo() {
+
+        val displayMetrics = resources.displayMetrics
+
+        val width = displayMetrics.widthPixels
+        val height = displayMetrics.heightPixels
+
+        val density = displayMetrics.density
+        val dpi = displayMetrics.densityDpi
+
+        binding.tvScreenResolution.text =
+            "Çözünürlük: ${width} × ${height} px"
+
+        binding.tvScreenDensity.text =
+            "Yoğunluk: %.2f".format(density)
+
+        binding.tvScreenDpi.text =
+            "DPI: $dpi"
+
+        val windowManager =
+            getSystemService(WINDOW_SERVICE) as WindowManager
+
+        val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display
+        } else {
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay
+        }
+
+        val refreshRate =
+            display?.refreshRate ?: 0f
+
+        binding.tvScreenRefreshRate.text =
+            "Yenileme hızı: %.2f Hz".format(refreshRate)
+
+        val rotation =
+            display?.rotation ?: Surface.ROTATION_0
+
+        val orientation = when (rotation) {
+            Surface.ROTATION_0,
+            Surface.ROTATION_180 -> "Dikey"
+
+            Surface.ROTATION_90,
+            Surface.ROTATION_270 -> "Yatay"
+
+            else -> "Bilinmiyor"
+        }
+
+        binding.tvScreenOrientation.text =
+            "Yön: $orientation"
+
+        binding.tvScreenState.text =
+            "Ekran durumu: AKTİF"
+
+        binding.tvScreenAtlasStatus.text =
+            "ScreenActivity: ÇALIŞIYOR"
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::binding.isInitialized) {
+            loadScreenInfo()
+        }
+    }
+
+    override fun onSupportNavigateUp(): Boolean {
+        finish()
+        return true
+    }
+}

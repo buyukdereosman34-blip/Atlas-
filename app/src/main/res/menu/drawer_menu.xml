@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <group android:checkableBehavior="single">
+        <item
+            android:id="@+id/menu_home"
+            android:title="@string/menu_home" />
+        <item
+            android:id="@+id/menu_control"
+            android:title="@string/menu_control" />
+        <item
+            android:id="@+id/menu_apps"
+            android:title="@string/menu_apps" />
+        <item
+            android:id="@+id/menu_touch"
+            android:title="@string/menu_touch" />
+        <item
+            android:id="@+id/menu_screen"
+            android:title="@string/menu_screen" />
+        <item
+            android:id="@+id/menu_system"
+            android:title="@string/menu_system" />
+        <item
+            android:id="@+id/menu_ai"
+            android:title="@string/menu_ai" />
+        <item
+            android:id="@+id/menu_logs"
+            android:title="@string/menu_logs" />
+    </group>
+    <item android:title="Sistem">
+        <menu>
+            <item
+                android:id="@+id/menu_settings"
+                android:title="@string/menu_settings" />
+            <item
+                android:id="@+id/menu_about"
+                android:title="@string/menu_about" />
+        </menu>
+    </item>
+</menu>

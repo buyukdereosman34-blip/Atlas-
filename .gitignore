@@ -1,0 +1,32 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Kotlin
+.kotlin/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# Local configuration
+local.properties
+
+# APK / Android build outputs
+*.apk
+*.aab
+
+# Generated / temporary files
+*.log
+.DS_Store
+Thumbs.db
+
+# Local backup / experimental copies
+*.bak
+app/**/*.before-*
+backup_before_modules/
+
+# Accidental empty files
+/echo
+/{ 
