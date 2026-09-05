@@ -1,25 +1,14 @@
 package com.atlas.app.runtime;
 
 import com.atlas.app.command.ShellCommandExecutor;
-import com.atlas.app.tool.AtlasTool;
-import com.atlas.app.tool.ToolRegistry;
 import com.atlas.app.tool.ToolResult;
-import com.atlas.app.tool.control.ControlTool;
 
 public class AtlasRuntime {
 
     private final ShellCommandExecutor shell;
-    private final ToolRegistry toolRegistry;
 
     public AtlasRuntime(String workingDirectory) {
         this.shell = new ShellCommandExecutor(workingDirectory);
-
-        this.toolRegistry = new ToolRegistry();
-        registerDefaultTools();
-    }
-
-    private void registerDefaultTools() {
-        toolRegistry.register(new ControlTool());
     }
 
     public ToolResult executeShell(String command) {
@@ -43,31 +32,6 @@ public class AtlasRuntime {
                 result.output.trim(),
                 result.exitCode
         );
-    }
-
-    public ToolResult executeTool(
-            String toolName,
-            String action,
-            String... args
-    ) {
-        AtlasTool tool = toolRegistry.get(toolName);
-
-        if (tool == null) {
-            return ToolResult.failure(
-                    "Tool not found: " + toolName,
-                    -1
-            );
-        }
-
-        return tool.execute(action, args);
-    }
-
-    public AtlasTool getTool(String toolName) {
-        return toolRegistry.get(toolName);
-    }
-
-    public ToolRegistry getToolRegistry() {
-        return toolRegistry;
     }
 
     public String getWorkingDirectory() {
