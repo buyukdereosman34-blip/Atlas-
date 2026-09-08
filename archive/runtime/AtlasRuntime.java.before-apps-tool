@@ -1,12 +1,9 @@
 package com.atlas.app.runtime;
 
-import android.content.Context;
-
 import com.atlas.app.command.ShellCommandExecutor;
 import com.atlas.app.tool.AtlasTool;
 import com.atlas.app.tool.ToolRegistry;
 import com.atlas.app.tool.ToolResult;
-import com.atlas.app.tool.apps.AppsTool;
 import com.atlas.app.tool.control.ControlTool;
 
 public class AtlasRuntime {
@@ -19,22 +16,6 @@ public class AtlasRuntime {
 
         this.toolRegistry = new ToolRegistry();
         registerDefaultTools();
-    }
-
-    public AtlasRuntime(
-            Context context,
-            String workingDirectory
-    ) {
-        this.shell = new ShellCommandExecutor(workingDirectory);
-
-        this.toolRegistry = new ToolRegistry();
-        registerDefaultTools();
-
-        if (context != null) {
-            toolRegistry.register(
-                    new AppsTool(context)
-            );
-        }
     }
 
     private void registerDefaultTools() {
