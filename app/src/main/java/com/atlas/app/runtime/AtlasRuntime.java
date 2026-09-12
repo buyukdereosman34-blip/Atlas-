@@ -7,6 +7,7 @@ import com.atlas.app.tool.AtlasTool;
 import com.atlas.app.tool.ToolRegistry;
 import com.atlas.app.tool.ToolResult;
 import com.atlas.app.tool.apps.AppsTool;
+import com.atlas.app.tool.screen.ScreenTool;
 import com.atlas.app.tool.control.ControlTool;
 
 public class AtlasRuntime {
@@ -33,6 +34,10 @@ public class AtlasRuntime {
         if (context != null) {
             toolRegistry.register(
                     new AppsTool(context)
+            );
+
+            toolRegistry.register(
+                    new ScreenTool(context)
             );
         }
     }

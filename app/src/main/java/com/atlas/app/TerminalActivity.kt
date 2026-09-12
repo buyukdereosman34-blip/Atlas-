@@ -7,6 +7,7 @@ import com.atlas.app.command.CommandDispatcher
 import com.atlas.app.command.ShellCommandExecutor
 import com.atlas.app.databinding.ActivityTerminalBinding
 import com.atlas.app.logging.AtlasLogger
+import com.atlas.app.runtime.AtlasRuntime
 
 class TerminalActivity : AppCompatActivity() {
 
@@ -14,6 +15,7 @@ class TerminalActivity : AppCompatActivity() {
     private lateinit var logger: AtlasLogger
     private lateinit var dispatcher: CommandDispatcher
     private lateinit var shell: ShellCommandExecutor
+    private lateinit var runtime: AtlasRuntime
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +49,11 @@ class TerminalActivity : AppCompatActivity() {
 
         shell = ShellCommandExecutor(filesDir.absolutePath)
 
+        runtime = AtlasRuntime(
+            this,
+            filesDir.absolutePath
+        )
+
         dispatcher = CommandDispatcher(
             logger,
             object : CommandDispatcher.Output {
@@ -60,7 +67,8 @@ class TerminalActivity : AppCompatActivity() {
                     }
                 }
             },
-            shell
+            shell,
+            runtime
         )
     }
 
