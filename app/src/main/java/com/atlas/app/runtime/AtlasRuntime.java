@@ -6,6 +6,8 @@ import com.atlas.app.command.ShellCommandExecutor;
 import com.atlas.app.policy.PolicyDecision;
 import com.atlas.app.policy.PolicyEngine;
 import com.atlas.app.policy.PolicyRequest;
+import com.atlas.app.permission.PermissionResolver;
+import com.atlas.app.permission.PermissionType;
 import com.atlas.app.tool.AtlasTool;
 import com.atlas.app.tool.ToolRegistry;
 import com.atlas.app.tool.ToolResult;
@@ -18,12 +20,14 @@ public class AtlasRuntime {
     private final ShellCommandExecutor shell;
     private final ToolRegistry toolRegistry;
     private final PolicyEngine policyEngine;
+    private final PermissionResolver permissionResolver;
 
     public AtlasRuntime(String workingDirectory) {
         this.shell = new ShellCommandExecutor(workingDirectory);
 
         this.toolRegistry = new ToolRegistry();
         this.policyEngine = new PolicyEngine();
+        this.permissionResolver = new PermissionResolver();
         registerDefaultTools();
     }
 
@@ -35,6 +39,7 @@ public class AtlasRuntime {
 
         this.toolRegistry = new ToolRegistry();
         this.policyEngine = new PolicyEngine();
+        this.permissionResolver = new PermissionResolver();
         registerDefaultTools();
 
         if (context != null) {
@@ -92,11 +97,17 @@ public class AtlasRuntime {
         }
 
         if (decision == PolicyDecision.REQUIRE_PERMISSION) {
+            PermissionType permissionType =
+                    permissionResolver.resolve(toolName, action);
+
             return ToolResult.failure(
                     "Permission required: "
+                            + permissionType.name()
+                            + " ("
                             + toolName.trim()
                             + "/"
-                            + action.trim(),
+                            + action.trim()
+                            + ")",
                     -11
             );
         }

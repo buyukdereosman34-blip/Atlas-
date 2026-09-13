@@ -31,7 +31,7 @@ public class AtlasRuntimeTest {
 
         assertFalse(result.success);
         assertEquals(
-                "Permission required: does-not-exist/status",
+                "Permission required: UNKNOWN (does-not-exist/status)",
                 result.output
         );
         assertEquals(-11, result.code);
@@ -57,7 +57,7 @@ public class AtlasRuntimeTest {
                 runtime.executeTool("control", "tap");
 
         assertFalse(result.success);
-        assertEquals("Permission required: control/tap", result.output);
+        assertEquals("Permission required: INPUT_CONTROL (control/tap)", result.output);
         assertEquals(-11, result.code);
     }
 
