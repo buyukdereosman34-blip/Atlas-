@@ -65,7 +65,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 R.id.nav_control -> {
-                    updateStatus("Mod: Kontrol Paneli")
+                    startActivity(Intent(this, ControlActivity::class.java))
                     true
                 }
 
@@ -75,7 +75,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 R.id.nav_logs -> {
-                    updateStatus("Mod: Log İzleyici")
+                    startActivity(Intent(this, LogsActivity::class.java))
                     true
                 }
 
@@ -88,6 +88,10 @@ class MainActivity : AppCompatActivity() {
         binding.navView.setNavigationItemSelectedListener { item ->
 
             when (item.itemId) {
+
+                R.id.menu_control -> {
+                    startActivity(Intent(this, ControlActivity::class.java))
+                }
 
                 R.id.menu_settings -> {
                     startActivity(
@@ -115,6 +119,10 @@ class MainActivity : AppCompatActivity() {
 
                 R.id.menu_ai -> {
                     startActivity(Intent(this, AIAgentActivity::class.java))
+                }
+
+                R.id.menu_logs -> {
+                    startActivity(Intent(this, LogsActivity::class.java))
                 }
 
                 else -> {

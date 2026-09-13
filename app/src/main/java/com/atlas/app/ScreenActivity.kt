@@ -402,6 +402,10 @@ class ScreenActivity : AppCompatActivity() {
 
     override fun onDestroy() {
 
+        if (captureActive) {
+            stopCapture()
+        }
+
         try {
             unregisterReceiver(
                 screenFrameReceiver

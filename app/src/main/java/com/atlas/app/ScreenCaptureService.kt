@@ -14,6 +14,7 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 
 class ScreenCaptureService : Service() {
@@ -29,6 +30,8 @@ class ScreenCaptureService : Service() {
 
         const val CHANNEL_ID = "atlas_screen_capture"
         const val NOTIFICATION_ID = 4101
+        private const val MAX_CAPTURE_FPS = 30
+        private const val MIN_FRAME_INTERVAL_MS = 1000L / MAX_CAPTURE_FPS
 
         @Volatile
         var instance: ScreenCaptureService? = null
@@ -42,6 +45,7 @@ class ScreenCaptureService : Service() {
     private var captureWidth = 0
     private var captureHeight = 0
     private var captureDensity = 0
+    private var lastProcessedFrameAt = 0L
 
     private var latestFrame: Bitmap? = null
 
@@ -154,6 +158,14 @@ class ScreenCaptureService : Service() {
         } catch (_: Exception) {
             null
         } ?: return
+
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastProcessedFrameAt < MIN_FRAME_INTERVAL_MS) {
+            image.close()
+            return
+        }
+
+        lastProcessedFrameAt = now
 
         try {
             val plane = image.planes.firstOrNull()

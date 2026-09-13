@@ -68,6 +68,17 @@
             android:label="@string/menu_settings"
             android:parentActivityName=".MainActivity" />
 
+        <activity
+            android:name=".LogsActivity"
+            android:exported="false"
+            android:label="Loglar"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".ControlActivity"
+            android:exported="false"
+            android:label="Control Panel"
+            android:parentActivityName=".MainActivity" />
+
     </application>
 
 </manifest>
