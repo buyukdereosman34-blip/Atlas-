@@ -8,6 +8,8 @@ import com.atlas.app.policy.PolicyEngine;
 import com.atlas.app.policy.PolicyRequest;
 import com.atlas.app.permission.PermissionResolver;
 import com.atlas.app.permission.PermissionType;
+import com.atlas.app.permission.PermissionChecker;
+import com.atlas.app.permission.PermissionState;
 import com.atlas.app.tool.AtlasTool;
 import com.atlas.app.tool.ToolRegistry;
 import com.atlas.app.tool.ToolResult;
@@ -21,6 +23,7 @@ public class AtlasRuntime {
     private final ToolRegistry toolRegistry;
     private final PolicyEngine policyEngine;
     private final PermissionResolver permissionResolver;
+    private final PermissionChecker permissionChecker;
 
     public AtlasRuntime(String workingDirectory) {
         this.shell = new ShellCommandExecutor(workingDirectory);
@@ -28,6 +31,7 @@ public class AtlasRuntime {
         this.toolRegistry = new ToolRegistry();
         this.policyEngine = new PolicyEngine();
         this.permissionResolver = new PermissionResolver();
+        this.permissionChecker = new PermissionChecker();
         registerDefaultTools();
     }
 
@@ -40,6 +44,7 @@ public class AtlasRuntime {
         this.toolRegistry = new ToolRegistry();
         this.policyEngine = new PolicyEngine();
         this.permissionResolver = new PermissionResolver();
+        this.permissionChecker = new PermissionChecker();
         registerDefaultTools();
 
         if (context != null) {
@@ -100,16 +105,21 @@ public class AtlasRuntime {
             PermissionType permissionType =
                     permissionResolver.resolve(toolName, action);
 
-            return ToolResult.failure(
-                    "Permission required: "
-                            + permissionType.name()
-                            + " ("
-                            + toolName.trim()
-                            + "/"
-                            + action.trim()
-                            + ")",
-                    -11
-            );
+            PermissionState permissionState =
+                    permissionChecker.check(permissionType);
+
+            if (permissionState != PermissionState.AVAILABLE) {
+                return ToolResult.failure(
+                        "Permission required: "
+                                + permissionType.name()
+                                + " ("
+                                + toolName.trim()
+                                + "/"
+                                + action.trim()
+                                + ")",
+                        -11
+                );
+            }
         }
 
         AtlasTool tool = toolRegistry.get(toolName);
