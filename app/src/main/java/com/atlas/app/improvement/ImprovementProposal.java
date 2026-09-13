@@ -5,18 +5,20 @@ public class ImprovementProposal {
     private final String title;
     private final String reason;
     private final String suggestedAction;
-    private final String validationCriteria;
+    private final ImprovementValidation validation;
+    private ImprovementProposalStatus status;
 
     public ImprovementProposal(
             String title,
             String reason,
             String suggestedAction,
-            String validationCriteria
+            ImprovementValidation validation
     ) {
         this.title = title;
         this.reason = reason;
         this.suggestedAction = suggestedAction;
-        this.validationCriteria = validationCriteria;
+        this.validation = validation;
+        this.status = ImprovementProposalStatus.PROPOSED;
     }
 
     public String getTitle() {
@@ -31,7 +33,23 @@ public class ImprovementProposal {
         return suggestedAction;
     }
 
-    public String getValidationCriteria() {
-        return validationCriteria;
+    public ImprovementValidation getValidation() {
+        return validation;
+    }
+
+    public ImprovementProposalStatus getStatus() {
+        return status;
+    }
+
+    public void approve() {
+        if (status == ImprovementProposalStatus.PROPOSED) {
+            status = ImprovementProposalStatus.APPROVED;
+        }
+    }
+
+    public void reject() {
+        if (status == ImprovementProposalStatus.PROPOSED) {
+            status = ImprovementProposalStatus.REJECTED;
+        }
     }
 }

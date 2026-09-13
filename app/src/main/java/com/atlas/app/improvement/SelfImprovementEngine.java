@@ -28,12 +28,18 @@ public class SelfImprovementEngine {
             return null;
         }
 
+        ImprovementValidation validation =
+                new ImprovementValidation(
+                        "Reproduce and test the observed problem",
+                        "The problem is reproducible and the proposed improvement passes validation"
+                );
+
         return new ImprovementProposal(
                 "Investigate: " + observation.getMessage(),
                 "Observation from " + observation.getSource()
                         + " with severity " + observation.getSeverity(),
                 "Investigate the observed problem and identify a minimal improvement.",
-                "The proposed improvement must be validated with a reproducible test."
+                validation
         );
     }
 }
