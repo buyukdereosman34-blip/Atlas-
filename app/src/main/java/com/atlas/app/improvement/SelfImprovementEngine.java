@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class SelfImprovementEngine {
+public class SelfImprovementEngine implements ImprovementObserver {
 
     private final List<ImprovementObservation> observations =
             new ArrayList<>();
@@ -15,6 +15,11 @@ public class SelfImprovementEngine {
         }
 
         observations.add(observation);
+    }
+
+    @Override
+    public void onObservation(ImprovementObservation observation) {
+        observe(observation);
     }
 
     public List<ImprovementObservation> getObservations() {
