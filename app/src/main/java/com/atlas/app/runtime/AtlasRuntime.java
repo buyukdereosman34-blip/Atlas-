@@ -3,6 +3,9 @@ package com.atlas.app.runtime;
 import android.content.Context;
 
 import com.atlas.app.command.ShellCommandExecutor;
+import com.atlas.app.policy.PolicyDecision;
+import com.atlas.app.policy.PolicyEngine;
+import com.atlas.app.policy.PolicyRequest;
 import com.atlas.app.tool.AtlasTool;
 import com.atlas.app.tool.ToolRegistry;
 import com.atlas.app.tool.ToolResult;
@@ -14,11 +17,13 @@ public class AtlasRuntime {
 
     private final ShellCommandExecutor shell;
     private final ToolRegistry toolRegistry;
+    private final PolicyEngine policyEngine;
 
     public AtlasRuntime(String workingDirectory) {
         this.shell = new ShellCommandExecutor(workingDirectory);
 
         this.toolRegistry = new ToolRegistry();
+        this.policyEngine = new PolicyEngine();
         registerDefaultTools();
     }
 
@@ -29,6 +34,7 @@ public class AtlasRuntime {
         this.shell = new ShellCommandExecutor(workingDirectory);
 
         this.toolRegistry = new ToolRegistry();
+        this.policyEngine = new PolicyEngine();
         registerDefaultTools();
 
         if (context != null) {
@@ -74,6 +80,27 @@ public class AtlasRuntime {
             String action,
             String... args
     ) {
+        PolicyDecision decision = policyEngine.evaluate(
+                new PolicyRequest(toolName, action, args)
+        );
+
+        if (decision == PolicyDecision.DENY) {
+            return ToolResult.failure(
+                    "Policy denied",
+                    -10
+            );
+        }
+
+        if (decision == PolicyDecision.REQUIRE_PERMISSION) {
+            return ToolResult.failure(
+                    "Permission required: "
+                            + toolName.trim()
+                            + "/"
+                            + action.trim(),
+                    -11
+            );
+        }
+
         AtlasTool tool = toolRegistry.get(toolName);
 
         if (tool == null) {

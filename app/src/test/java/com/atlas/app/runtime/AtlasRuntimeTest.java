@@ -30,7 +30,47 @@ public class AtlasRuntimeTest {
                 runtime.executeTool("does-not-exist", "status");
 
         assertFalse(result.success);
-        assertEquals(-1, result.code);
+        assertEquals(
+                "Permission required: does-not-exist/status",
+                result.output
+        );
+        assertEquals(-11, result.code);
+    }
+
+    @Test
+    public void policyAllowsControlStatus() {
+        AtlasRuntime runtime = new AtlasRuntime(".");
+
+        ToolResult result =
+                runtime.executeTool("control", "status");
+
+        assertTrue(result.success);
+        assertEquals("ControlTool: ready", result.output);
+        assertEquals(0, result.code);
+    }
+
+    @Test
+    public void policyBlocksControlTapUntilPermissionIsAvailable() {
+        AtlasRuntime runtime = new AtlasRuntime(".");
+
+        ToolResult result =
+                runtime.executeTool("control", "tap");
+
+        assertFalse(result.success);
+        assertEquals("Permission required: control/tap", result.output);
+        assertEquals(-11, result.code);
+    }
+
+    @Test
+    public void policyBlocksInvalidRequest() {
+        AtlasRuntime runtime = new AtlasRuntime(".");
+
+        ToolResult result =
+                runtime.executeTool("", "status");
+
+        assertFalse(result.success);
+        assertEquals("Policy denied", result.output);
+        assertEquals(-10, result.code);
     }
 
     @Test
