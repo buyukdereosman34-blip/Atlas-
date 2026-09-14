@@ -44,4 +44,8 @@ public class ImprovementLearning {
     public ImprovementMethod findBestMethod() {
         return methodStore.findBest();
     }
+
+    public ImprovementMethodStore getMethodStore() {
+        return methodStore;
+    }
 }
