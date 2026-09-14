@@ -13,6 +13,7 @@ public class SelfImprovementEngine implements ImprovementObserver {
     private final ImprovementTaskAnalyzer taskAnalyzer;
     private final ImprovementMethodRunner methodRunner;
     private final ImprovementChangeProposalGenerator changeProposalGenerator;
+    private final ImprovementChangeSafety changeSafety;
 
     public SelfImprovementEngine() {
         this(new ImprovementMethodStore());
@@ -30,6 +31,8 @@ public class SelfImprovementEngine implements ImprovementObserver {
                 );
         this.changeProposalGenerator =
                 new ImprovementChangeProposalGenerator();
+        this.changeSafety =
+                new ImprovementChangeSafety();
     }
 
     public void observe(ImprovementObservation observation) {
@@ -107,6 +110,12 @@ public class SelfImprovementEngine implements ImprovementObserver {
                 finding,
                 affectedFiles
         );
+    }
+
+    public ImprovementChangeSafetyReport evaluateChangeSafety(
+            ImprovementChangeProposal proposal
+    ) {
+        return changeSafety.evaluate(proposal);
     }
 
     public void addMethod(
