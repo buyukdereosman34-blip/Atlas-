@@ -9,6 +9,26 @@ public class SelfImprovementEngine implements ImprovementObserver {
     private final List<ImprovementObservation> observations =
             new ArrayList<>();
 
+    private final ImprovementMethodStore methodStore;
+    private final ImprovementTaskAnalyzer taskAnalyzer;
+    private final ImprovementMethodRunner methodRunner;
+
+    public SelfImprovementEngine() {
+        this(new ImprovementMethodStore());
+    }
+
+    public SelfImprovementEngine(
+            ImprovementMethodStore methodStore
+    ) {
+        this.methodStore = methodStore;
+        this.taskAnalyzer =
+                new ImprovementTaskAnalyzer(methodStore);
+        this.methodRunner =
+                new ImprovementMethodRunner(
+                        new ImprovementMethodRanker()
+                );
+    }
+
     public void observe(ImprovementObservation observation) {
         if (observation == null) {
             return;
@@ -18,7 +38,9 @@ public class SelfImprovementEngine implements ImprovementObserver {
     }
 
     @Override
-    public void onObservation(ImprovementObservation observation) {
+    public void onObservation(
+            ImprovementObservation observation
+    ) {
         observe(observation);
     }
 
@@ -46,5 +68,39 @@ public class SelfImprovementEngine implements ImprovementObserver {
                 "Investigate the observed problem and identify a minimal improvement.",
                 validation
         );
+    }
+
+    public ImprovementFinding analyzeTask(
+            ImprovementTask task
+    ) {
+        return taskAnalyzer.analyze(task);
+    }
+
+    public ImprovementMethod executeTask(
+            ImprovementTask task,
+            ImprovementMethodExecutor executor
+    ) {
+        if (task == null) {
+            return null;
+        }
+
+        if (executor == null) {
+            return null;
+        }
+
+        return methodRunner.run(
+                methodStore.getAll(),
+                executor
+        );
+    }
+
+    public void addMethod(
+            ImprovementMethod method
+    ) {
+        methodStore.add(method);
+    }
+
+    public ImprovementMethodStore getMethodStore() {
+        return methodStore;
     }
 }
