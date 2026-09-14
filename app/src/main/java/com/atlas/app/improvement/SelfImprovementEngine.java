@@ -14,6 +14,7 @@ public class SelfImprovementEngine implements ImprovementObserver {
     private final ImprovementMethodRunner methodRunner;
     private final ImprovementChangeProposalGenerator changeProposalGenerator;
     private final ImprovementChangeSafety changeSafety;
+    private final ImprovementSelfDevelopmentLoop selfDevelopmentLoop;
 
     public SelfImprovementEngine() {
         this(new ImprovementMethodStore());
@@ -33,6 +34,10 @@ public class SelfImprovementEngine implements ImprovementObserver {
                 new ImprovementChangeProposalGenerator();
         this.changeSafety =
                 new ImprovementChangeSafety();
+        this.selfDevelopmentLoop =
+                new ImprovementSelfDevelopmentLoop(
+                        methodStore
+                );
     }
 
     public void observe(ImprovementObservation observation) {
@@ -81,6 +86,60 @@ public class SelfImprovementEngine implements ImprovementObserver {
     ) {
         return taskAnalyzer.analyze(task);
     }
+
+    public ImprovementSelfDevelopmentResult executeSelfDevelopment(
+            ImprovementTask task,
+            List<String> affectedFiles,
+            String sourcePath,
+            String labRoot,
+            String targetPath,
+            ImprovementLabChangeApplier changeApplier
+    ) {
+        if (task == null) {
+            return new ImprovementSelfDevelopmentResult(
+                    false,
+                    "INPUT",
+                    "Improvement task is missing",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        }
+
+        ImprovementFinding finding =
+                analyzeTask(task);
+
+        if (finding == null) {
+            return new ImprovementSelfDevelopmentResult(
+                    false,
+                    "ANALYSIS",
+                    "Unable to analyze improvement task",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        }
+
+        return selfDevelopmentLoop.execute(
+                task,
+                finding,
+                affectedFiles,
+                sourcePath,
+                labRoot,
+                targetPath,
+                changeApplier
+        );
+    }
+
+
 
     public ImprovementMethod executeTask(
             ImprovementTask task,
