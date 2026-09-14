@@ -67,7 +67,8 @@ public class ImprovementSelfDevelopmentLoop {
                 proposalGenerator.generate(
                         task,
                         finding,
-                        affectedFiles
+                        affectedFiles,
+                        sourcePath
                 );
 
         ImprovementChangeSafetyReport safetyReport =

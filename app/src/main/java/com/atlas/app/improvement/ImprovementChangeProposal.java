@@ -3,6 +3,7 @@ package com.atlas.app.improvement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 public class ImprovementChangeProposal {
 
@@ -13,6 +14,7 @@ public class ImprovementChangeProposal {
     private final String risk;
     private final boolean reversible;
     private final ImprovementValidation validation;
+    private final Map<String, String> proposedFileContents;
 
     private ImprovementChangeProposalStatus status =
             ImprovementChangeProposalStatus.PROPOSED;
@@ -26,6 +28,28 @@ public class ImprovementChangeProposal {
             boolean reversible,
             ImprovementValidation validation
     ) {
+        this(
+                what,
+                why,
+                affectedFiles,
+                expectedResult,
+                risk,
+                reversible,
+                validation,
+                Collections.emptyMap()
+        );
+    }
+
+    public ImprovementChangeProposal(
+            String what,
+            String why,
+            List<String> affectedFiles,
+            String expectedResult,
+            String risk,
+            boolean reversible,
+            ImprovementValidation validation,
+            Map<String, String> proposedFileContents
+    ) {
         this.what = what;
         this.why = why;
         this.affectedFiles =
@@ -38,6 +62,14 @@ public class ImprovementChangeProposal {
         this.risk = risk;
         this.reversible = reversible;
         this.validation = validation;
+        this.proposedFileContents =
+                proposedFileContents == null
+                        ? Collections.emptyMap()
+                        : Collections.unmodifiableMap(
+                                new java.util.HashMap<>(
+                                        proposedFileContents
+                                )
+                        );
     }
 
     public String getWhat() {
@@ -66,6 +98,10 @@ public class ImprovementChangeProposal {
 
     public ImprovementValidation getValidation() {
         return validation;
+    }
+
+    public Map<String, String> getProposedFileContents() {
+        return proposedFileContents;
     }
 
     public ImprovementChangeProposalStatus getStatus() {

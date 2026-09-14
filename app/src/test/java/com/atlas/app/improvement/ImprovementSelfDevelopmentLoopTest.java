@@ -69,43 +69,7 @@ public class ImprovementSelfDevelopmentLoopTest {
                 );
 
         ImprovementLabChangeApplier applier =
-                (proposal, workspace) -> {
-
-                    File file =
-                            new File(
-                                    workspace.getWorkspacePath(),
-                                    "app/src/main/java/com/example/test/Example.java"
-                            );
-
-                    try {
-
-                        String content =
-                                new String(
-                                        Files.readAllBytes(
-                                                file.toPath()
-                                        ),
-                                        StandardCharsets.UTF_8
-                                );
-
-                        content =
-                                content.replace(
-                                        "\"old\"",
-                                        "\"new\""
-                                );
-
-                        Files.write(
-                                file.toPath(),
-                                content.getBytes(
-                                        StandardCharsets.UTF_8
-                                )
-                        );
-
-                        return true;
-
-                    } catch (Exception e) {
-                        return false;
-                    }
-                };
+                new ImprovementRealLabChangeApplier();
 
         ImprovementSelfDevelopmentResult result =
                 loop.execute(
