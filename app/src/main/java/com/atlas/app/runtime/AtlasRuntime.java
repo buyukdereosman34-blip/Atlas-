@@ -3,6 +3,8 @@ package com.atlas.app.runtime;
 import android.content.Context;
 
 import com.atlas.app.command.ShellCommandExecutor;
+import com.atlas.app.improvement.ImprovementObservation;
+import com.atlas.app.improvement.ImprovementObserver;
 import com.atlas.app.policy.PolicyDecision;
 import com.atlas.app.policy.PolicyEngine;
 import com.atlas.app.policy.PolicyRequest;
@@ -24,9 +26,18 @@ public class AtlasRuntime {
     private final PolicyEngine policyEngine;
     private final PermissionResolver permissionResolver;
     private final PermissionChecker permissionChecker;
+    private final ImprovementObserver improvementObserver;
 
     public AtlasRuntime(String workingDirectory) {
+        this(workingDirectory, null);
+    }
+
+    public AtlasRuntime(
+            String workingDirectory,
+            ImprovementObserver improvementObserver
+    ) {
         this.shell = new ShellCommandExecutor(workingDirectory);
+        this.improvementObserver = improvementObserver;
 
         this.toolRegistry = new ToolRegistry();
         this.policyEngine = new PolicyEngine();
@@ -45,6 +56,7 @@ public class AtlasRuntime {
         this.policyEngine = new PolicyEngine();
         this.permissionResolver = new PermissionResolver();
         this.permissionChecker = new PermissionChecker();
+        this.improvementObserver = null;
         registerDefaultTools();
 
         if (context != null) {
@@ -95,9 +107,11 @@ public class AtlasRuntime {
         );
 
         if (decision == PolicyDecision.DENY) {
-            return ToolResult.failure(
-                    "Policy denied",
-                    -10
+            return reportToolFailure(
+                    ToolResult.failure(
+                            "Policy denied",
+                            -10
+                    )
             );
         }
 
@@ -109,15 +123,17 @@ public class AtlasRuntime {
                     permissionChecker.check(permissionType);
 
             if (permissionState != PermissionState.AVAILABLE) {
-                return ToolResult.failure(
-                        "Permission required: "
-                                + permissionType.name()
-                                + " ("
-                                + toolName.trim()
-                                + "/"
-                                + action.trim()
-                                + ")",
-                        -11
+                return reportToolFailure(
+                        ToolResult.failure(
+                                "Permission required: "
+                                        + permissionType.name()
+                                        + " ("
+                                        + toolName.trim()
+                                        + "/"
+                                        + action.trim()
+                                        + ")",
+                                -11
+                        )
                 );
             }
         }
@@ -125,13 +141,31 @@ public class AtlasRuntime {
         AtlasTool tool = toolRegistry.get(toolName);
 
         if (tool == null) {
-            return ToolResult.failure(
-                    "Tool not found: " + toolName,
-                    -1
+            return reportToolFailure(
+                    ToolResult.failure(
+                            "Tool not found: " + toolName,
+                            -1
+                    )
             );
         }
 
-        return tool.execute(action, args);
+        return reportToolFailure(
+                tool.execute(action, args)
+        );
+    }
+
+    private ToolResult reportToolFailure(ToolResult result) {
+        if (!result.success && improvementObserver != null) {
+            improvementObserver.onObservation(
+                    new ImprovementObservation(
+                            "runtime",
+                            result.output,
+                            "MEDIUM"
+                    )
+            );
+        }
+
+        return result;
     }
 
     public AtlasTool getTool(String toolName) {

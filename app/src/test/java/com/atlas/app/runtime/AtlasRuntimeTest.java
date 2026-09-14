@@ -86,6 +86,32 @@ public class AtlasRuntimeTest {
     }
 
     @Test
+    public void runtimeReportsFailedToolExecutionToObserver() {
+        final com.atlas.app.improvement.ImprovementObservation[] received =
+                new com.atlas.app.improvement.ImprovementObservation[1];
+
+        com.atlas.app.improvement.ImprovementObserver observer =
+                new com.atlas.app.improvement.ImprovementObserver() {
+                    @Override
+                    public void onObservation(
+                            com.atlas.app.improvement.ImprovementObservation observation
+                    ) {
+                        received[0] = observation;
+                    }
+                };
+
+        AtlasRuntime runtime = new AtlasRuntime(".", observer);
+
+        ToolResult result =
+                runtime.executeTool("control", "tap");
+
+        assertFalse(result.success);
+        assertNotNull(received[0]);
+        assertEquals("runtime", received[0].getSource());
+        assertEquals(result.output, received[0].getMessage());
+    }
+
+    @Test
     public void executeShellReturnsFailureForNonZeroExit() {
         AtlasRuntime runtime = new AtlasRuntime(".");
 
