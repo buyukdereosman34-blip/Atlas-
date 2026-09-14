@@ -12,6 +12,7 @@ public class SelfImprovementEngine implements ImprovementObserver {
     private final ImprovementMethodStore methodStore;
     private final ImprovementTaskAnalyzer taskAnalyzer;
     private final ImprovementMethodRunner methodRunner;
+    private final ImprovementChangeProposalGenerator changeProposalGenerator;
 
     public SelfImprovementEngine() {
         this(new ImprovementMethodStore());
@@ -27,6 +28,8 @@ public class SelfImprovementEngine implements ImprovementObserver {
                 new ImprovementMethodRunner(
                         new ImprovementMethodRanker()
                 );
+        this.changeProposalGenerator =
+                new ImprovementChangeProposalGenerator();
     }
 
     public void observe(ImprovementObservation observation) {
@@ -91,6 +94,18 @@ public class SelfImprovementEngine implements ImprovementObserver {
         return methodRunner.run(
                 methodStore.getAll(),
                 executor
+        );
+    }
+
+    public ImprovementChangeProposal proposeChange(
+            ImprovementTask task,
+            ImprovementFinding finding,
+            List<String> affectedFiles
+    ) {
+        return changeProposalGenerator.generate(
+                task,
+                finding,
+                affectedFiles
         );
     }
 

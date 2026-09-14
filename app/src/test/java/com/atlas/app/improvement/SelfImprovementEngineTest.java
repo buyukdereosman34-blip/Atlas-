@@ -6,6 +6,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNotNull;
 
 public class SelfImprovementEngineTest {
@@ -148,6 +149,106 @@ public class SelfImprovementEngineTest {
         assertSame(second, result);
         assertEquals(1, first.getFailureCount());
         assertEquals(1, second.getSuccessCount());
+    }
+
+    @Test
+    public void createsChangeProposalFromTaskAndFinding() {
+        SelfImprovementEngine engine =
+                new SelfImprovementEngine();
+
+        ImprovementTask task =
+                new ImprovementTask(
+                        "Improve runtime",
+                        "Runtime failure needs improvement"
+                );
+
+        ImprovementFinding finding =
+                new ImprovementFinding(
+                        "Runtime",
+                        "Tool execution failed",
+                        "Improve failure handling"
+                );
+
+        ImprovementChangeProposal proposal =
+                engine.proposeChange(
+                        task,
+                        finding,
+                        java.util.Arrays.asList(
+                                "AtlasRuntime.java",
+                                "SelfImprovementEngine.java"
+                        )
+                );
+
+        assertNotNull(proposal);
+        assertEquals(
+                ImprovementChangeProposalStatus.PROPOSED,
+                proposal.getStatus()
+        );
+        assertEquals(
+                "Runtime",
+                proposal.getAffectedFiles().isEmpty()
+                        ? null
+                        : finding.getArea()
+        );
+        assertEquals(2, proposal.getAffectedFiles().size());
+        assertEquals(
+                "MEDIUM",
+                proposal.getRisk()
+        );
+        assertTrue(proposal.isReversible());
+        assertNotNull(proposal.getValidation());
+    }
+
+    @Test
+    public void changeProposalCanBeApproved() {
+        ImprovementChangeProposal proposal =
+                new ImprovementChangeProposal(
+                        "Change code",
+                        "Improve behavior",
+                        java.util.Collections.singletonList(
+                                "Test.java"
+                        ),
+                        "Tests pass",
+                        "LOW",
+                        true,
+                        new ImprovementValidation(
+                                "Run tests",
+                                "Tests pass"
+                        )
+                );
+
+        proposal.approve();
+
+        assertEquals(
+                ImprovementChangeProposalStatus.APPROVED,
+                proposal.getStatus()
+        );
+    }
+
+    @Test
+    public void changeProposalCanBeRejected() {
+        ImprovementChangeProposal proposal =
+                new ImprovementChangeProposal(
+                        "Change code",
+                        "Improve behavior",
+                        java.util.Collections.singletonList(
+                                "Test.java"
+                        ),
+                        "Tests pass",
+                        "LOW",
+                        true,
+                        new ImprovementValidation(
+                                "Run tests",
+                                "Tests pass"
+                        )
+                );
+
+        proposal.reject();
+
+        assertEquals(
+                ImprovementChangeProposalStatus.REJECTED,
+                proposal.getStatus()
+        );
     }
 
     @Test
