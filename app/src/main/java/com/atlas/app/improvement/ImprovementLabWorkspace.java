@@ -6,6 +6,7 @@ public class ImprovementLabWorkspace {
     private final String sourcePath;
     private final String workspacePath;
     private final String snapshotId;
+    private final String snapshotPath;
 
     private ImprovementLabStatus status =
             ImprovementLabStatus.CREATED;
@@ -16,10 +17,27 @@ public class ImprovementLabWorkspace {
             String workspacePath,
             String snapshotId
     ) {
+        this(
+                id,
+                sourcePath,
+                workspacePath,
+                snapshotId,
+                null
+        );
+    }
+
+    public ImprovementLabWorkspace(
+            String id,
+            String sourcePath,
+            String workspacePath,
+            String snapshotId,
+            String snapshotPath
+    ) {
         this.id = id;
         this.sourcePath = sourcePath;
         this.workspacePath = workspacePath;
         this.snapshotId = snapshotId;
+        this.snapshotPath = snapshotPath;
     }
 
     public String getId() {
@@ -36,6 +54,10 @@ public class ImprovementLabWorkspace {
 
     public String getSnapshotId() {
         return snapshotId;
+    }
+
+    public String getSnapshotPath() {
+        return snapshotPath;
     }
 
     public ImprovementLabStatus getStatus() {
