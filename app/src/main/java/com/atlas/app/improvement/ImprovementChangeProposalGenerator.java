@@ -1,14 +1,24 @@
 package com.atlas.app.improvement;
 
-import java.io.File;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import com.atlas.app.codegen.CodeChangeSet;
+import com.atlas.app.codegen.CodeGenerationEngine;
+import com.atlas.app.codegen.CodeGenerationRequest;
+import com.atlas.app.codegen.RuleBasedCodeGenerator;
+
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class ImprovementChangeProposalGenerator {
+
+    private final CodeGenerationEngine codeGenerationEngine;
+
+    public ImprovementChangeProposalGenerator() {
+        this.codeGenerationEngine =
+                new CodeGenerationEngine(
+                        new RuleBasedCodeGenerator()
+                );
+    }
 
     public ImprovementChangeProposal generate(
             ImprovementTask task,
@@ -41,7 +51,8 @@ public class ImprovementChangeProposalGenerator {
 
         String what =
                 "Improve " + finding.getArea()
-                        + " by addressing: " + finding.getProblem();
+                        + " by addressing: "
+                        + finding.getProblem();
 
         String why =
                 task.getDescription();
@@ -54,12 +65,18 @@ public class ImprovementChangeProposalGenerator {
                         ? Collections.emptyList()
                         : affectedFiles;
 
-        Map<String, String> proposedFileContents =
-                generateFileContents(
+        CodeGenerationRequest request =
+                new CodeGenerationRequest(
+                        task.getDescription(),
                         sourcePath,
-                        files,
-                        finding
+                        files
                 );
+
+        CodeChangeSet changeSet =
+                codeGenerationEngine.generate(request);
+
+        Map<String, String> proposedFileContents =
+                changeSet.getFileContents();
 
         return new ImprovementChangeProposal(
                 what,
@@ -71,132 +88,5 @@ public class ImprovementChangeProposalGenerator {
                 validation,
                 proposedFileContents
         );
-    }
-
-    private Map<String, String> generateFileContents(
-            String sourcePath,
-            List<String> affectedFiles,
-            ImprovementFinding finding
-    ) {
-        if (sourcePath == null
-                || sourcePath.trim().isEmpty()
-                || affectedFiles == null
-                || affectedFiles.isEmpty()
-                || finding == null) {
-            return Collections.emptyMap();
-        }
-
-        Map<String, String> result =
-                new HashMap<>();
-
-        String recommendation =
-                finding.getRecommendation() == null
-                        ? ""
-                        : finding.getRecommendation().toLowerCase();
-
-        for (String affectedFile : affectedFiles) {
-            if (affectedFile == null
-                    || affectedFile.trim().isEmpty()) {
-                continue;
-            }
-
-            File file =
-                    findFile(
-                            new File(sourcePath),
-                            affectedFile
-                    );
-
-            if (file == null) {
-                continue;
-            }
-
-            try {
-                String content =
-                        new String(
-                                Files.readAllBytes(
-                                        file.toPath()
-                                ),
-                                StandardCharsets.UTF_8
-                        );
-
-                String changed = content;
-
-                if (recommendation.contains("old")
-                        && recommendation.contains("new")) {
-                    changed =
-                            changed.replace(
-                                    "\"old\"",
-                                    "\"new\""
-                            );
-                }
-
-                if (!changed.equals(content)) {
-                    String sourceRoot =
-                            new File(sourcePath)
-                                    .getCanonicalPath();
-
-                    String relativePath =
-                            file.getCanonicalPath()
-                                    .substring(
-                                            sourceRoot.length()
-                                    )
-                                    .replace(
-                                            File.separatorChar,
-                                            '/'
-                                    );
-
-                    if (relativePath.startsWith("/")) {
-                        relativePath =
-                                relativePath.substring(1);
-                    }
-
-                    result.put(
-                            relativePath,
-                            changed
-                    );
-                }
-
-            } catch (Exception ignored) {
-                // Skip files that cannot be read safely.
-            }
-        }
-
-        return result;
-    }
-
-    private File findFile(
-            File root,
-            String fileName
-    ) {
-        if (root == null || !root.exists()) {
-            return null;
-        }
-
-        if (root.isFile()) {
-            return root.getName().equals(fileName)
-                    ? root
-                    : null;
-        }
-
-        File[] children =
-                root.listFiles();
-
-        if (children == null) {
-            return null;
-        }
-
-        for (File child : children) {
-            File found =
-                    findFile(
-                            child,
-                            fileName
-                    );
-
-            if (found != null) {
-                return found;
-            }
-        }
-
-        return null;
     }
 }
