@@ -18,6 +18,12 @@ public class RuleBasedCodeGenerator
                     Pattern.CASE_INSENSITIVE
             );
 
+    private static final Pattern FROM_TO_PATTERN =
+            Pattern.compile(
+                    "\\bfrom\\s+(.+?)\\s+to\\s+(.+?)(?:\\.|$)",
+                    Pattern.CASE_INSENSITIVE
+            );
+
     @Override
     public CodeChangeSet generate(
             CodeGenerationRequest request
@@ -39,15 +45,31 @@ public class RuleBasedCodeGenerator
                         description.trim()
                 );
 
-        if (!matcher.find()) {
-            return new CodeChangeSet(null);
+        String oldValue;
+        String newValue;
+
+        if (matcher.find()) {
+            oldValue =
+                    normalizeValue(matcher.group(1));
+
+            newValue =
+                    normalizeValue(matcher.group(2));
+        } else {
+            Matcher fromToMatcher =
+                    FROM_TO_PATTERN.matcher(
+                            description.trim()
+                    );
+
+            if (!fromToMatcher.find()) {
+                return new CodeChangeSet(null);
+            }
+
+            oldValue =
+                    normalizeValue(fromToMatcher.group(1));
+
+            newValue =
+                    normalizeValue(fromToMatcher.group(2));
         }
-
-        String oldValue =
-                normalizeValue(matcher.group(1));
-
-        String newValue =
-                normalizeValue(matcher.group(2));
 
         if (oldValue.isEmpty()
                 || newValue.isEmpty()

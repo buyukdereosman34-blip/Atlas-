@@ -5,6 +5,11 @@ public abstract class CloudAIProviderBase
 
     protected final AIProviderConfig config;
 
+    protected final AIProviderConfig getConfig() {
+        return config;
+    }
+
+
     protected CloudAIProviderBase(
             AIProviderConfig config
     ) {
