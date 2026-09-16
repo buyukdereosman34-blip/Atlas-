@@ -3,7 +3,10 @@ package com.atlas.app.improvement;
 import com.atlas.app.codegen.CodeChangeSet;
 import com.atlas.app.codegen.CodeGenerationEngine;
 import com.atlas.app.codegen.CodeGenerationRequest;
+import com.atlas.app.codegen.CodeGenerator;
+import com.atlas.app.codegen.RouterAICodeGenerator;
 import com.atlas.app.codegen.RuleBasedCodeGenerator;
+import com.atlas.app.ai.AIProviderRouter;
 
 import java.util.Collections;
 import java.util.List;
@@ -17,6 +20,18 @@ public class ImprovementChangeProposalGenerator {
         this.codeGenerationEngine =
                 new CodeGenerationEngine(
                         new RuleBasedCodeGenerator()
+                );
+    }
+
+    public ImprovementChangeProposalGenerator(AIProviderRouter router) {
+        CodeGenerator fallback = new RuleBasedCodeGenerator();
+
+        this.codeGenerationEngine =
+                new CodeGenerationEngine(
+                        new RouterAICodeGenerator(
+                                router,
+                                fallback
+                        )
                 );
     }
 

@@ -1,5 +1,7 @@
 package com.atlas.app.improvement;
 
+import com.atlas.app.ai.AIProviderRouter;
+
 import java.util.List;
 
 public class ImprovementSelfDevelopmentLoop {
@@ -16,9 +18,25 @@ public class ImprovementSelfDevelopmentLoop {
     public ImprovementSelfDevelopmentLoop(
             ImprovementMethodStore methodStore
     ) {
+        this(
+                methodStore,
+                null
+        );
+    }
+
+    public ImprovementSelfDevelopmentLoop(
+            ImprovementMethodStore methodStore,
+            AIProviderRouter aiProviderRouter
+    ) {
         this.ranker = new ImprovementMethodRanker();
+
         this.proposalGenerator =
-                new ImprovementChangeProposalGenerator();
+                aiProviderRouter == null
+                        ? new ImprovementChangeProposalGenerator()
+                        : new ImprovementChangeProposalGenerator(
+                                aiProviderRouter
+                        );
+
         this.changeSafety =
                 new ImprovementChangeSafety();
         this.labManager =
