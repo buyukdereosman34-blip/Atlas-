@@ -11,6 +11,10 @@ public abstract class LocalAIProviderBase
         this.config = config;
     }
 
+    protected final AIProviderConfig getConfig() {
+        return config;
+    }
+
     @Override
     public boolean isAvailable() {
         return config != null
