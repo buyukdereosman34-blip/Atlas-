@@ -1,5 +1,7 @@
 package com.atlas.app.improvement;
 
+import com.atlas.app.ai.AIProviderRouter;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -23,6 +25,16 @@ public class SelfImprovementEngine implements ImprovementObserver {
     public SelfImprovementEngine(
             ImprovementMethodStore methodStore
     ) {
+        this(
+                methodStore,
+                null
+        );
+    }
+
+    public SelfImprovementEngine(
+            ImprovementMethodStore methodStore,
+            AIProviderRouter router
+    ) {
         this.methodStore = methodStore;
         this.taskAnalyzer =
                 new ImprovementTaskAnalyzer(methodStore);
@@ -30,14 +42,30 @@ public class SelfImprovementEngine implements ImprovementObserver {
                 new ImprovementMethodRunner(
                         new ImprovementMethodRanker()
                 );
-        this.changeProposalGenerator =
-                new ImprovementChangeProposalGenerator();
+
+        if (router != null) {
+            this.changeProposalGenerator =
+                    new ImprovementChangeProposalGenerator(
+                            router
+                    );
+
+            this.selfDevelopmentLoop =
+                    new ImprovementSelfDevelopmentLoop(
+                            methodStore,
+                            router
+                    );
+        } else {
+            this.changeProposalGenerator =
+                    new ImprovementChangeProposalGenerator();
+
+            this.selfDevelopmentLoop =
+                    new ImprovementSelfDevelopmentLoop(
+                            methodStore
+                    );
+        }
+
         this.changeSafety =
                 new ImprovementChangeSafety();
-        this.selfDevelopmentLoop =
-                new ImprovementSelfDevelopmentLoop(
-                        methodStore
-                );
     }
 
     public void observe(ImprovementObservation observation) {
