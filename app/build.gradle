@@ -19,6 +19,48 @@ android {
         viewBinding true
     }
 
+    testOptions {
+        unitTests.all {
+            def atlasEnv = [:]
+            def atlasEnvFile = new File(System.getProperty("user.home"), ".config/atlas/env")
+
+            if (atlasEnvFile.isFile()) {
+                atlasEnvFile.eachLine { line ->
+                    def match = line =~ /^\\s*export\\s+([A-Za-z_][A-Za-z0-9_]*)=(.*)\\s*$/
+                    if (match.matches()) {
+                        def name = match.group(1)
+                        def value = match.group(2).trim()
+
+                        if ((value.startsWith("'") && value.endsWith("'")) ||
+                            (value.startsWith('"') && value.endsWith('"'))) {
+                            value = value.substring(1, value.length() - 1)
+                        }
+
+                        atlasEnv[name] = value
+                    }
+                }
+            }
+
+            environment "ATLAS_AI_PROVIDER",
+                    System.getProperty(
+                            "ATLAS_AI_PROVIDER",
+                            System.getenv("ATLAS_AI_PROVIDER") ?: atlasEnv["ATLAS_AI_PROVIDER"] ?: ""
+                    )
+
+            environment "ATLAS_AI_GEMINI_MODEL",
+                    System.getProperty(
+                            "ATLAS_AI_GEMINI_MODEL",
+                            System.getenv("ATLAS_AI_GEMINI_MODEL") ?: atlasEnv["ATLAS_AI_GEMINI_MODEL"] ?: ""
+                    )
+
+            environment "ATLAS_AI_GEMINI_API_KEY",
+                    System.getProperty(
+                            "ATLAS_AI_GEMINI_API_KEY",
+                            System.getenv("ATLAS_AI_GEMINI_API_KEY") ?: atlasEnv["ATLAS_AI_GEMINI_API_KEY"] ?: ""
+                    )
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17

@@ -10,9 +10,27 @@ public final class AIProviderConfigLoader {
             String defaultEndpoint,
             String defaultModel
     ) {
-        String endpoint = read("ATLAS_AI_ENDPOINT");
-        String model = read("ATLAS_AI_MODEL");
-        String apiKey = read("ATLAS_AI_API_KEY");
+        String prefix =
+                "ATLAS_AI_"
+                        + normalizeProviderName(providerName)
+                        + "_";
+
+        String endpoint = read(prefix + "ENDPOINT");
+        String model = read(prefix + "MODEL");
+        String apiKey = read(prefix + "API_KEY");
+
+        // Generic values remain as fallback.
+        if (endpoint.isEmpty()) {
+            endpoint = read("ATLAS_AI_ENDPOINT");
+        }
+
+        if (model.isEmpty()) {
+            model = read("ATLAS_AI_MODEL");
+        }
+
+        if (apiKey.isEmpty()) {
+            apiKey = read("ATLAS_AI_API_KEY");
+        }
 
         if (endpoint.isEmpty()) {
             endpoint = defaultEndpoint == null
@@ -31,6 +49,17 @@ public final class AIProviderConfigLoader {
                 model,
                 apiKey
         );
+    }
+
+    private static String normalizeProviderName(String providerName) {
+        if (providerName == null) {
+            return "";
+        }
+
+        return providerName
+                .trim()
+                .toUpperCase()
+                .replace('-', '_');
     }
 
     public static String getProviderName() {
