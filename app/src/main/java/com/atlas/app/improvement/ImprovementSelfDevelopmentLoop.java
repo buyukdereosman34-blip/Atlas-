@@ -14,12 +14,14 @@ public class ImprovementSelfDevelopmentLoop {
     private final ImprovementLabEvaluator evaluator;
     private final ImprovementLabPromoter promoter;
     private final ImprovementLearning learning;
+    private final ImprovementFixer fixer;
 
     public ImprovementSelfDevelopmentLoop(
             ImprovementMethodStore methodStore
     ) {
         this(
                 methodStore,
+                null,
                 null
         );
     }
@@ -27,6 +29,18 @@ public class ImprovementSelfDevelopmentLoop {
     public ImprovementSelfDevelopmentLoop(
             ImprovementMethodStore methodStore,
             AIProviderRouter aiProviderRouter
+    ) {
+        this(
+                methodStore,
+                aiProviderRouter,
+                null
+        );
+    }
+
+    public ImprovementSelfDevelopmentLoop(
+            ImprovementMethodStore methodStore,
+            AIProviderRouter aiProviderRouter,
+            ImprovementFixer fixer
     ) {
         this.ranker = new ImprovementMethodRanker();
 
@@ -49,6 +63,14 @@ public class ImprovementSelfDevelopmentLoop {
                 new ImprovementLabPromoter();
         this.learning =
                 new ImprovementLearning(methodStore);
+        this.fixer =
+                fixer != null
+                        ? fixer
+                        : aiProviderRouter == null
+                                ? null
+                                : new AIImprovementFixer(
+                                        aiProviderRouter
+                                );
     }
 
     public ImprovementSelfDevelopmentResult execute(
@@ -89,53 +111,169 @@ public class ImprovementSelfDevelopmentLoop {
                         sourcePath
                 );
 
-        ImprovementChangeSafetyReport safetyReport =
-                changeSafety.evaluate(proposal);
-
-        if (!safetyReport.isAllowed()) {
-            return new ImprovementSelfDevelopmentResult(
-                    false,
-                    "SAFETY",
-                    safetyReport.getReason(),
-                    null,
-                    proposal,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
-            );
-        }
-
-        ImprovementLabWorkspace workspace =
-                labManager.createWorkspace(
-                        proposal,
-                        sourcePath,
-                        labRoot
-                );
-
-        if (workspace == null) {
-            return new ImprovementSelfDevelopmentResult(
-                    false,
-                    "LAB",
-                    "Unable to create LAB workspace",
-                    null,
-                    proposal,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
-            );
-        }
-
         ImprovementMethod method =
                 selectMethod();
 
-        if (!changeApplier.apply(
-                proposal,
-                workspace
-        )) {
+        ImprovementLabWorkspace lastWorkspace = null;
+        ImprovementLabBuildResult lastBuildResult = null;
+        ImprovementLabEvaluationResult lastEvaluationResult = null;
+
+        final int maxAttempts = 3;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+
+            if (proposal == null) {
+                ImprovementLearningResult learningResult =
+                        learning.record(method, false);
+
+                return new ImprovementSelfDevelopmentResult(
+                        false,
+                        "GENERATION",
+                        "Unable to generate improvement proposal",
+                        method,
+                        null,
+                        lastWorkspace,
+                        lastBuildResult,
+                        lastEvaluationResult,
+                        null,
+                        learningResult
+                );
+            }
+
+            ImprovementChangeSafetyReport safetyReport =
+                    changeSafety.evaluate(proposal);
+
+            if (!safetyReport.isAllowed()) {
+                ImprovementLearningResult learningResult =
+                        learning.record(method, false);
+
+                return new ImprovementSelfDevelopmentResult(
+                        false,
+                        "SAFETY",
+                        safetyReport.getReason(),
+                        method,
+                        proposal,
+                        lastWorkspace,
+                        lastBuildResult,
+                        lastEvaluationResult,
+                        null,
+                        learningResult
+                );
+            }
+
+            ImprovementLabWorkspace workspace =
+                    labManager.createWorkspace(
+                            proposal,
+                            sourcePath,
+                            labRoot
+                    );
+
+            if (workspace == null) {
+                ImprovementLearningResult learningResult =
+                        learning.record(method, false);
+
+                return new ImprovementSelfDevelopmentResult(
+                        false,
+                        "LAB",
+                        "Unable to create LAB workspace",
+                        method,
+                        proposal,
+                        null,
+                        lastBuildResult,
+                        lastEvaluationResult,
+                        null,
+                        learningResult
+                );
+            }
+
+            lastWorkspace = workspace;
+
+            if (!changeApplier.apply(
+                    proposal,
+                    workspace
+            )) {
+                workspace.markFailed();
+
+                labManager.archiveFailedWorkspace(
+                        workspace,
+                        labRoot
+                );
+
+                ImprovementLearningResult learningResult =
+                        learning.record(method, false);
+
+                return new ImprovementSelfDevelopmentResult(
+                        false,
+                        "CHANGE",
+                        "LAB change application failed",
+                        method,
+                        proposal,
+                        workspace,
+                        null,
+                        null,
+                        null,
+                        learningResult
+                );
+            }
+
+            workspace.markChanged();
+
+            ImprovementLabBuildResult buildResult =
+                    buildExecutor.buildAndTest(workspace);
+
+            ImprovementLabEvaluationResult evaluationResult =
+                    evaluator.evaluate(
+                            workspace,
+                            buildResult
+                    );
+
+            lastBuildResult = buildResult;
+            lastEvaluationResult = evaluationResult;
+
+            if (evaluationResult.isPassed()) {
+
+                ImprovementLabPromotionResult promotionResult =
+                        promoter.promote(
+                                workspace,
+                                targetPath
+                        );
+
+                if (!promotionResult.isSuccess()) {
+                    ImprovementLearningResult learningResult =
+                            learning.record(method, false);
+
+                    return new ImprovementSelfDevelopmentResult(
+                            false,
+                            "PROMOTION",
+                            promotionResult.getReason(),
+                            method,
+                            proposal,
+                            workspace,
+                            buildResult,
+                            evaluationResult,
+                            promotionResult,
+                            learningResult
+                    );
+                }
+
+                ImprovementLearningResult learningResult =
+                        learning.record(method, true);
+
+                return new ImprovementSelfDevelopmentResult(
+                        true,
+                        "COMPLETED",
+                        "Self-development loop completed successfully "
+                                + "on attempt " + attempt,
+                        method,
+                        proposal,
+                        workspace,
+                        buildResult,
+                        evaluationResult,
+                        promotionResult,
+                        learningResult
+                );
+            }
+
             workspace.markFailed();
 
             labManager.archiveFailedWorkspace(
@@ -143,106 +281,54 @@ public class ImprovementSelfDevelopmentLoop {
                     labRoot
             );
 
-            ImprovementLearningResult learningResult =
-                    learning.record(
-                            method,
-                            false
-                    );
+            if (attempt < maxAttempts
+                    && fixer != null) {
 
-            return new ImprovementSelfDevelopmentResult(
-                    false,
-                    "CHANGE",
-                    "LAB change application failed",
-                    method,
-                    proposal,
-                    workspace,
-                    null,
-                    null,
-                    null,
-                    learningResult
-            );
-        }
+                proposal =
+                        fixer.fix(
+                                task,
+                                finding,
+                                proposal,
+                                buildResult,
+                                evaluationResult
+                        );
 
-        workspace.markChanged();
-
-        ImprovementLabBuildResult buildResult =
-                buildExecutor.buildAndTest(workspace);
-
-        ImprovementLabEvaluationResult evaluationResult =
-                evaluator.evaluate(
-                        workspace,
-                        buildResult
-                );
-
-        if (!evaluationResult.isPassed()) {
-            labManager.archiveFailedWorkspace(
-                    workspace,
-                    labRoot
-            );
+                continue;
+            }
 
             ImprovementLearningResult learningResult =
-                    learning.record(
-                            method,
-                            false
-                    );
+                    learning.record(method, false);
 
             return new ImprovementSelfDevelopmentResult(
                     false,
                     "EVALUATION",
-                    evaluationResult.getReason(),
+                    "Self-development failed after "
+                            + attempt
+                            + " attempt(s): "
+                            + evaluationResult.getReason(),
                     method,
                     proposal,
                     workspace,
                     buildResult,
                     evaluationResult,
                     null,
-                    learningResult
-            );
-        }
-
-        ImprovementLabPromotionResult promotionResult =
-                promoter.promote(
-                        workspace,
-                        targetPath
-                );
-
-        if (!promotionResult.isSuccess()) {
-            ImprovementLearningResult learningResult =
-                    learning.record(
-                            method,
-                            false
-                    );
-
-            return new ImprovementSelfDevelopmentResult(
-                    false,
-                    "PROMOTION",
-                    promotionResult.getReason(),
-                    method,
-                    proposal,
-                    workspace,
-                    buildResult,
-                    evaluationResult,
-                    promotionResult,
                     learningResult
             );
         }
 
         ImprovementLearningResult learningResult =
-                learning.record(
-                        method,
-                        true
-                );
+                learning.record(method, false);
 
         return new ImprovementSelfDevelopmentResult(
-                true,
-                "COMPLETED",
-                "Self-development loop completed successfully",
+                false,
+                "RETRY",
+                "Self-development retry loop ended unexpectedly",
                 method,
                 proposal,
-                workspace,
-                buildResult,
-                evaluationResult,
-                promotionResult,
+                lastWorkspace,
+                lastBuildResult,
+                lastEvaluationResult,
+                null,
                 learningResult
         );
     }

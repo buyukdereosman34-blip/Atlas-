@@ -34,4 +34,31 @@ public final class AtlasDevelopmentEngine {
     public SelfImprovementEngine getSelfImprovementEngine() {
         return selfImprovementEngine;
     }
+
+    public ImprovementSelfDevelopmentResult develop(
+            String title,
+            String description,
+            java.util.List<String> affectedFiles,
+            String sourcePath,
+            String labRoot,
+            String targetPath
+    ) {
+        ImprovementTask task =
+                new ImprovementTask(
+                        title,
+                        description
+                );
+
+        ImprovementLabChangeApplier changeApplier =
+                new ImprovementRealLabChangeApplier();
+
+        return selfImprovementEngine.executeSelfDevelopment(
+                task,
+                affectedFiles,
+                sourcePath,
+                labRoot,
+                targetPath,
+                changeApplier
+        );
+    }
 }

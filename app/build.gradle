@@ -26,7 +26,7 @@ android {
 
             if (atlasEnvFile.isFile()) {
                 atlasEnvFile.eachLine { line ->
-                    def match = line =~ /^\\s*export\\s+([A-Za-z_][A-Za-z0-9_]*)=(.*)\\s*$/
+                    def match = line =~ /^\s*export\s+([A-Za-z_][A-Za-z0-9_]*)=(.*)\s*$/
                     if (match.matches()) {
                         def name = match.group(1)
                         def value = match.group(2).trim()

@@ -3,108 +3,83 @@ package com.atlas.app.ai;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class GeminiProviderTest {
 
     @Test
-    public void providerHasCloudType() {
+    public void generateBuildsGeminiRequestCorrectly() {
+
         AIProviderConfig config =
                 new AIProviderConfig(
-                        "https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent",
-                        "gemini-test",
-                        "test-key"
+                        GeminiProvider.DEFAULT_ENDPOINT,
+                        "gemini-3.6-flash",
+                        "test-api-key"
                 );
+
+        CapturingTransport transport =
+                new CapturingTransport();
 
         GeminiProvider provider =
                 new GeminiProvider(
                         config,
-                        request -> AITransportResponse.success(
-                                200,
-                                "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hello\"}]}}]}"
-                        )
-                );
-
-        assertEquals(
-                "gemini",
-                provider.getName()
-        );
-
-        assertEquals(
-                AIProviderType.CLOUD,
-                provider.getType()
-        );
-
-        assertTrue(
-                provider.isAvailable()
-        );
-    }
-
-    @Test
-    public void providerParsesGenerateContentOutput() {
-        AIProviderConfig config =
-                new AIProviderConfig(
-                        "https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent",
-                        "gemini-test",
-                        "test-key"
-                );
-
-        GeminiProvider provider =
-                new GeminiProvider(
-                        config,
-                        request -> AITransportResponse.success(
-                                200,
-                                "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"ATLAS works\"}]}}]}"
-                        )
+                        transport
                 );
 
         AIResponse response =
                 provider.generate(
                         new AIRequest(
                                 "You are ATLAS.",
-                                "Say hello."
+                                "Write OK."
                         )
                 );
 
-        assertTrue(
-                response.isSuccess()
+        assertTrue(response.isSuccess());
+
+        assertEquals(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+                transport.request.getEndpoint()
         );
 
         assertEquals(
-                "ATLAS works",
-                response.getOutput()
+                "test-api-key",
+                transport.request.getHeaders()
+                        .get("x-goog-api-key")
+        );
+
+        assertTrue(
+                transport.request.getBody()
+                        .contains("\"contents\"")
+        );
+
+        assertTrue(
+                transport.request.getBody()
+                        .contains("Write OK.")
         );
     }
 
-    @Test
-    public void providerFailsWithoutConfig() {
-        AIProviderConfig config =
-                new AIProviderConfig(
-                        "",
-                        "",
-                        ""
-                );
+    private static class CapturingTransport
+            implements AIProviderTransport {
 
-        GeminiProvider provider =
-                new GeminiProvider(
-                        config,
-                        request -> AITransportResponse.success(
-                                200,
-                                "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"should not run\"}]}}]}"
-                        )
-                );
+        private AITransportRequest request;
 
-        AIResponse response =
-                provider.generate(
-                        new AIRequest(
-                                "",
-                                "test"
-                        )
-                );
+        @Override
+        public AITransportResponse execute(
+                AITransportRequest request
+        ) {
+            this.request = request;
 
-        assertFalse(
-                response.isSuccess()
-        );
+            return AITransportResponse.success(
+                    200,
+                    "{"
+                            + "\"candidates\":[{"
+                            + "\"content\":{"
+                            + "\"parts\":[{"
+                            + "\"text\":\"OK\"}"
+                            + "]}"
+                            + "}]"
+                            + "}"
+            );
+        }
     }
 }

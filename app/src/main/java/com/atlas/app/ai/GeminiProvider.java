@@ -80,21 +80,24 @@ public final class GeminiProvider extends CloudAIProviderBase {
 
             String endpoint = getEndpoint();
 
-            if (!endpoint.contains("?")) {
-                endpoint += "?key=" + getConfig().getApiKey();
-            } else {
-                endpoint += "&key=" + getConfig().getApiKey();
-            }
-
             Map<String, String> headers =
-                    new LinkedHashMap<>();
+                new LinkedHashMap<>();
 
+        headers.put(
+                "Content-Type",
+                "application/json"
+        );
+
+        String apiKey = getConfig().getApiKey();
+
+        if (apiKey != null && !apiKey.trim().isEmpty()) {
             headers.put(
-                    "Content-Type",
-                    "application/json"
+                    "x-goog-api-key",
+                    apiKey
             );
+        }
 
-            AITransportRequest transportRequest =
+        AITransportRequest transportRequest =
                     new AITransportRequest(
                             endpoint,
                             "POST",
@@ -140,13 +143,20 @@ public final class GeminiProvider extends CloudAIProviderBase {
         String endpoint =
                 getConfig().getEndpoint();
 
+        String model =
+                getConfig().getModel();
+
         if (endpoint == null
                 || endpoint.trim().isEmpty()) {
-
-            String model =
-                    getConfig().getModel();
-
             return DEFAULT_ENDPOINT
+                    + "/"
+                    + model
+                    + ":generateContent";
+        }
+
+        if (endpoint.equals(DEFAULT_ENDPOINT)
+                || endpoint.endsWith("/models")) {
+            return endpoint
                     + "/"
                     + model
                     + ":generateContent";

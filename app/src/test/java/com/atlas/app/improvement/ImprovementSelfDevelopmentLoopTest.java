@@ -164,6 +164,234 @@ public class ImprovementSelfDevelopmentLoopTest {
         );
     }
 
+
+    @Test
+    public void selfDevelopmentLoopRetriesAfterEvaluationFailure() throws Exception {
+
+        Path root =
+                Files.createTempDirectory(
+                        "atlas-self-development-retry-"
+                );
+
+        File source =
+                new File(root.toFile(), "source");
+
+        File labRoot =
+                new File(root.toFile(), "lab");
+
+        File target =
+                new File(root.toFile(), "target");
+
+        assertTrue(source.mkdirs());
+        assertTrue(labRoot.mkdirs());
+        assertTrue(target.mkdirs());
+
+        createAndroidProject(source);
+
+        ImprovementMethodStore store =
+                new ImprovementMethodStore();
+
+        ImprovementMethod method =
+                new ImprovementMethod(
+                        "retry-method",
+                        "Retry a failed controlled source change",
+                        "test",
+                        "LAB",
+                        "LOW"
+                );
+
+        store.add(method);
+
+        ImprovementTask task =
+                new ImprovementTask(
+                        "Change Example value",
+                        "Change the Example value from old to new"
+                );
+
+        ImprovementFinding finding =
+                new ImprovementFinding(
+                        "Example.java",
+                        "The value is outdated",
+                        "Change old to new"
+                );
+
+        final int[] fixCalls = {0};
+
+        ImprovementFixer fixer =
+                (
+                        failedTask,
+                        failedFinding,
+                        failedProposal,
+                        buildResult,
+                        evaluationResult
+                ) -> {
+                    fixCalls[0]++;
+
+                    return new ImprovementChangeProposal(
+                            "Fix Example value",
+                            "Retry after failed validation",
+                            Arrays.asList("Example.java"),
+                            "The value is new",
+                            "LOW",
+                            true,
+                            new ImprovementValidation(
+                                    "Build and test the corrected change",
+                                    "The corrected change passes validation"
+                            ),
+                            java.util.Collections.singletonMap(
+                                    "app/src/main/java/com/example/test/Example.java",
+                                    "package com.example.test;\n\n"
+                                            + "public class Example {\n"
+                                            + "    public static String value() {\n"
+                                            + "        return \"new\";\n"
+                                            + "    }\n"
+                                            + "}\n"
+                            )
+                    );
+                };
+
+        ImprovementSelfDevelopmentLoop loop =
+                new ImprovementSelfDevelopmentLoop(
+                        store,
+                        null,
+                        fixer
+                );
+
+        final int[] applyCalls = {0};
+
+        ImprovementLabChangeApplier realApplier =
+                new ImprovementRealLabChangeApplier();
+
+        ImprovementLabChangeApplier applier =
+                (proposal, workspace) -> {
+                    boolean applied =
+                            realApplier.apply(
+                                    proposal,
+                                    workspace
+                            );
+
+                    applyCalls[0]++;
+
+                    if (applied && applyCalls[0] == 1) {
+                        File brokenFile =
+                                new File(
+                                        workspace.getWorkspacePath(),
+                                        "app/src/main/java/com/example/test/Example.java"
+                                );
+
+                        try {
+                            write(
+                                    brokenFile,
+                                    "package com.example.test;\n\n"
+                                            + "public class Example {\n"
+                                            + "    public static String value() {\n"
+                                            + "        return ;\n"
+                                            + "    }\n"
+                                            + "}\n"
+                            );
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+
+                    return applied;
+                };
+
+        ImprovementSelfDevelopmentResult result =
+                loop.execute(
+                        task,
+                        finding,
+                        Arrays.asList("Example.java"),
+                        source.getAbsolutePath(),
+                        labRoot.getAbsolutePath(),
+                        target.getAbsolutePath(),
+                        applier
+                );
+
+        assertNotNull(result);
+
+        assertTrue(
+                "Retry loop failed: "
+                        + result.getStage()
+                        + " / "
+                        + result.getMessage(),
+                result.isSuccess()
+        );
+
+        assertEquals(
+                "COMPLETED",
+                result.getStage()
+        );
+
+        assertTrue(
+                "Expected the second attempt to succeed.",
+                result.getMessage().contains("attempt 2")
+        );
+
+        assertEquals(
+                1,
+                fixCalls[0]
+        );
+
+        assertNotNull(result.getProposal());
+        assertNotNull(result.getBuildResult());
+        assertNotNull(result.getEvaluationResult());
+        assertNotNull(result.getPromotionResult());
+        assertNotNull(result.getLearningResult());
+
+        assertTrue(
+                result.getBuildResult().isSuccessful()
+        );
+
+        assertTrue(
+                result.getEvaluationResult().isPassed()
+        );
+
+        assertTrue(
+                result.getPromotionResult().isSuccess()
+        );
+
+        assertTrue(
+                result.getLearningResult().isRecorded()
+        );
+
+        File promotedFile =
+                new File(
+                        target,
+                        "app/src/main/java/com/example/test/Example.java"
+                );
+
+        assertTrue(
+                promotedFile.exists()
+        );
+
+        String promoted =
+                new String(
+                        Files.readAllBytes(
+                                promotedFile.toPath()
+                        ),
+                        StandardCharsets.UTF_8
+                );
+
+        assertTrue(
+                promoted.contains("\"new\"")
+        );
+
+        assertFalse(
+                promoted.contains("\"old\"")
+        );
+
+        assertEquals(
+                1,
+                method.getSuccessCount()
+        );
+
+        assertEquals(
+                0,
+                method.getFailureCount()
+        );
+    }
+
     private void createAndroidProject(
             File source
     ) throws Exception {
