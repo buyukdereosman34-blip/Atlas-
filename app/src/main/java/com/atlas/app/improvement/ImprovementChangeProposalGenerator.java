@@ -93,10 +93,15 @@ public class ImprovementChangeProposalGenerator {
         Map<String, String> proposedFileContents =
                 changeSet.getFileContents();
 
+        java.util.LinkedHashSet<String> generatedFiles =
+                new java.util.LinkedHashSet<>(files);
+
+        generatedFiles.addAll(proposedFileContents.keySet());
+
         return new ImprovementChangeProposal(
                 what,
                 why,
-                files,
+                new java.util.ArrayList<>(generatedFiles),
                 expectedResult,
                 "MEDIUM",
                 true,

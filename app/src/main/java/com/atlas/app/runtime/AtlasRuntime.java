@@ -18,6 +18,7 @@ import com.atlas.app.tool.ToolResult;
 import com.atlas.app.tool.apps.AppsTool;
 import com.atlas.app.tool.screen.ScreenTool;
 import com.atlas.app.tool.control.ControlTool;
+import com.atlas.app.tool.improvement.SelfDevelopmentTool;
 
 public class AtlasRuntime {
 
@@ -72,6 +73,7 @@ public class AtlasRuntime {
 
     private void registerDefaultTools() {
         toolRegistry.register(new ControlTool());
+        toolRegistry.register(new SelfDevelopmentTool(this));
     }
 
     public ToolResult executeShell(String command) {

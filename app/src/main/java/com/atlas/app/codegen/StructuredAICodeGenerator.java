@@ -84,6 +84,99 @@ public class StructuredAICodeGenerator
             }
         }
 
+        appendSourceTree(prompt, request);
+
         return prompt.toString();
+    }
+
+    private void appendSourceTree(
+            StringBuilder prompt,
+            CodeGenerationRequest request
+    ) {
+        String sourcePath = request.getSourcePath();
+
+        if (sourcePath == null
+                || sourcePath.trim().isEmpty()) {
+            return;
+        }
+
+        java.io.File sourceRoot =
+                new java.io.File(sourcePath);
+
+        if (!sourceRoot.isDirectory()) {
+            return;
+        }
+
+        prompt.append("\nATLAS source tree:\n");
+
+        java.util.List<String> paths =
+                new java.util.ArrayList<>();
+
+        collectSourcePaths(
+                sourceRoot,
+                sourceRoot,
+                paths
+        );
+
+        java.util.Collections.sort(paths);
+
+        for (String relativePath : paths) {
+            prompt.append("- ")
+                    .append(relativePath)
+                    .append('\n');
+        }
+
+        prompt.append(
+                "\nYou may create new files when the requested feature does not exist. "
+                + "You may modify existing files when integration requires it. "
+                + "Return every created or modified file in the structured format.\n"
+        );
+    }
+
+    private void collectSourcePaths(
+            java.io.File root,
+            java.io.File directory,
+            java.util.List<String> result
+    ) {
+        java.io.File[] children =
+                directory.listFiles();
+
+        if (children == null) {
+            return;
+        }
+
+        for (java.io.File child : children) {
+            if (child.isDirectory()) {
+                String name = child.getName();
+
+                if ("build".equals(name)
+                        || ".gradle".equals(name)
+                        || ".git".equals(name)) {
+                    continue;
+                }
+
+                collectSourcePaths(
+                        root,
+                        child,
+                        result
+                );
+                continue;
+            }
+
+            String name = child.getName();
+
+            if (name.endsWith(".java")
+                    || name.endsWith(".kt")) {
+                try {
+                    result.add(
+                            root.toPath()
+                                    .relativize(child.toPath())
+                                    .toString()
+                    );
+                } catch (Exception ignored) {
+                    // Skip paths that cannot be relativized.
+                }
+            }
+        }
     }
 }
