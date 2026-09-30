@@ -1,0 +1,5566 @@
+
+==================== FILE: app/src/main/java/com/atlas/app/command/CommandDispatcher.java ====================
+
+package com.atlas.app.command;
+
+import com.atlas.app.logging.AtlasLogger;
+import com.atlas.app.runtime.AtlasRuntime;
+
+public class CommandDispatcher {
+
+    public interface Output {
+        void print(String message);
+    }
+
+    private final AtlasLogger logger;
+    private final Output output;
+    private final ShellCommandExecutor shell;
+    private final AtlasRuntime runtime;
+
+    public CommandDispatcher(
+            AtlasLogger logger,
+            Output output,
+            ShellCommandExecutor shell
+    ) {
+        this(logger, output, shell, null);
+    }
+
+    public CommandDispatcher(
+            AtlasLogger logger,
+            Output output,
+            ShellCommandExecutor shell,
+            AtlasRuntime runtime
+    ) {
+        this.logger = logger;
+        this.output = output;
+        this.shell = shell;
+        this.runtime = runtime;
+    }
+
+    public void execute(String command) {
+
+        if (command == null) {
+            return;
+        }
+
+        command = command.trim();
+
+        if (command.isEmpty()) {
+            return;
+        }
+
+        logger.info("Command received: " + command);
+
+        switch (command.toLowerCase()) {
+
+            case "help":
+                help();
+                break;
+
+            case "version":
+                version();
+                break;
+
+            case "status":
+                status();
+                break;
+
+            case "logs":
+                logs();
+                break;
+
+            case "clear":
+                output.print("__CLEAR__");
+                break;
+
+            default:
+                executeShell(command);
+                break;
+        }
+    }
+
+    private void executeShell(String command) {
+
+        logger.info("Shell command: " + command);
+
+        ShellCommandExecutor.Result result =
+                shell.execute(command);
+
+        if (!result.output.isEmpty()) {
+            output.print(result.output.trim());
+        }
+
+        if (result.exitCode != 0) {
+            output.print(
+                    "Process exited with code: "
+                            + result.exitCode
+            );
+
+            logger.warn(
+                    "Shell command failed: "
+                            + result.exitCode
+            );
+        }
+    }
+
+    private void help() {
+
+        output.print("ATLAS CLI commands:");
+        output.print("  help     - show available commands");
+        output.print("  version  - show ATLAS version");
+        output.print("  status   - show runtime status");
+        output.print("  logs     - show logging subsystem status");
+        output.print("  clear    - clear terminal output");
+        output.print("");
+        output.print("Shell commands:");
+        output.print("  Any Android/Unix shell command");
+    }
+
+    private void version() {
+
+        output.print("ATLAS CLI version 0.1");
+        output.print("Android interface: active");
+    }
+
+    private void status() {
+
+        output.print("ATLAS status:");
+        output.print("  UI:     active");
+        output.print("  Logger: active");
+        output.print("  CLI:    active");
+        output.print("  Shell:  active");
+        output.print("  PRoot:  suspended");
+        output.print("  RootFS: suspended");
+    }
+
+    private void logs() {
+
+        output.print("Logging subsystem: active");
+        output.print(
+                "Buffered entries: "
+                        + logger.getBuffer().size()
+        );
+
+        for (String line :
+                logger.getBuffer().snapshot()) {
+
+            output.print(line);
+        }
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/command/CommandHistory.java ====================
+
+package com.atlas.app.command;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class CommandHistory {
+
+    private final int maxEntries;
+    private final List<String> entries = new ArrayList<>();
+    private int position = 0;
+
+    public CommandHistory(int maxEntries) {
+        if (maxEntries <= 0) {
+            throw new IllegalArgumentException(
+                "maxEntries must be greater than zero"
+            );
+        }
+
+        this.maxEntries = maxEntries;
+    }
+
+    public synchronized void add(String command) {
+        if (command == null || command.trim().isEmpty()) {
+            return;
+        }
+
+        String value = command.trim();
+
+        if (!entries.isEmpty() &&
+            entries.get(entries.size() - 1).equals(value)) {
+            position = entries.size();
+            return;
+        }
+
+        entries.add(value);
+
+        while (entries.size() > maxEntries) {
+            entries.remove(0);
+        }
+
+        position = entries.size();
+    }
+
+    public synchronized String previous() {
+        if (entries.isEmpty()) {
+            return "";
+        }
+
+        if (position > 0) {
+            position--;
+        }
+
+        return entries.get(position);
+    }
+
+    public synchronized String next() {
+        if (entries.isEmpty()) {
+            return "";
+        }
+
+        if (position < entries.size() - 1) {
+            position++;
+            return entries.get(position);
+        }
+
+        position = entries.size();
+        return "";
+    }
+
+    public synchronized void resetPosition() {
+        position = entries.size();
+    }
+
+    public synchronized int size() {
+        return entries.size();
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/command/ShellCommandExecutor.java ====================
+
+package com.atlas.app.command;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+
+public class ShellCommandExecutor {
+
+    private String workingDirectory;
+
+    public ShellCommandExecutor(String initialDirectory) {
+        this.workingDirectory = initialDirectory;
+    }
+
+    public String getWorkingDirectory() {
+        return workingDirectory;
+    }
+
+    public Result execute(String command) {
+
+        try {
+            ProcessBuilder processBuilder = new ProcessBuilder(
+                    "sh",
+                    "-c",
+                    command
+            );
+
+            processBuilder.directory(
+                    new java.io.File(workingDirectory)
+            );
+
+            processBuilder.redirectErrorStream(true);
+
+            Process process = processBuilder.start();
+
+            BufferedReader reader =
+                    new BufferedReader(
+                            new InputStreamReader(
+                                    process.getInputStream()
+                            )
+                    );
+
+            StringBuilder output = new StringBuilder();
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+
+            int exitCode = process.waitFor();
+
+            return new Result(
+                    output.toString(),
+                    exitCode
+            );
+
+        } catch (Exception e) {
+
+            return new Result(
+                    "Shell error: " + e.getMessage(),
+                    -1
+            );
+        }
+    }
+
+    public static class Result {
+
+        public final String output;
+        public final int exitCode;
+
+        public Result(String output, int exitCode) {
+            this.output = output;
+            this.exitCode = exitCode;
+        }
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/command/CommandDispatcher.java.bak ====================
+
+package com.atlas.app.command;
+
+import com.atlas.app.logging.AtlasLogger;
+
+public class CommandDispatcher {
+
+    public interface Output {
+        void print(String message);
+    }
+
+    private final AtlasLogger logger;
+    private final Output output;
+    private final ShellCommandExecutor shell;
+
+    public CommandDispatcher(
+            AtlasLogger logger,
+            Output output,
+            ShellCommandExecutor shell
+    ) {
+        this.logger = logger;
+        this.output = output;
+        this.shell = shell;
+    }
+
+    public void execute(String command) {
+
+        if (command == null) {
+            return;
+        }
+
+        command = command.trim();
+
+        if (command.isEmpty()) {
+            return;
+        }
+
+        logger.info("Command received: " + command);
+
+        switch (command.toLowerCase()) {
+
+            case "help":
+                help();
+                break;
+
+            case "version":
+                version();
+                break;
+
+            case "status":
+                status();
+                break;
+
+            case "logs":
+                logs();
+                break;
+
+            case "clear":
+                output.print("__CLEAR__");
+                break;
+
+            default:
+                executeShell(command);
+                break;
+        }
+    }
+
+    private void executeShell(String command) {
+
+        logger.info("Shell command: " + command);
+
+        ShellCommandExecutor.Result result =
+                shell.execute(command);
+
+        if (!result.output.isEmpty()) {
+            output.print(result.output.trim());
+        }
+
+        if (result.exitCode != 0) {
+            output.print(
+                    "Process exited with code: "
+                            + result.exitCode
+            );
+
+            logger.warn(
+                    "Shell command failed: "
+                            + result.exitCode
+            );
+        }
+    }
+
+    private void help() {
+
+        output.print("ATLAS CLI commands:");
+        output.print("  help     - show available commands");
+        output.print("  version  - show ATLAS version");
+        output.print("  status   - show runtime status");
+        output.print("  logs     - show logging subsystem status");
+        output.print("  clear    - clear terminal output");
+        output.print("");
+        output.print("Shell commands:");
+        output.print("  Any Android/Unix shell command");
+    }
+
+    private void version() {
+
+        output.print("ATLAS CLI version 0.1");
+        output.print("Android interface: active");
+    }
+
+    private void status() {
+
+        output.print("ATLAS status:");
+        output.print("  UI:     active");
+        output.print("  Logger: active");
+        output.print("  CLI:    active");
+        output.print("  Shell:  active");
+        output.print("  PRoot:  suspended");
+        output.print("  RootFS: suspended");
+    }
+
+    private void logs() {
+
+        output.print("Logging subsystem: active");
+        output.print(
+                "Buffered entries: "
+                        + logger.getBuffer().size()
+        );
+
+        for (String line :
+                logger.getBuffer().snapshot()) {
+
+            output.print(line);
+        }
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/tool/ToolRegistry.java ====================
+
+package com.atlas.app.tool;
+
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public class ToolRegistry {
+
+    private final Map<String, AtlasTool> tools =
+            new LinkedHashMap<>();
+
+    public void register(AtlasTool tool) {
+        if (tool == null) {
+            return;
+        }
+
+        String name = tool.getName();
+
+        if (name == null || name.trim().isEmpty()) {
+            return;
+        }
+
+        tools.put(name.trim().toLowerCase(), tool);
+    }
+
+    public AtlasTool get(String name) {
+        if (name == null) {
+            return null;
+        }
+
+        return tools.get(name.trim().toLowerCase());
+    }
+
+    public Collection<AtlasTool> getAll() {
+        return tools.values();
+    }
+
+    public boolean contains(String name) {
+        return get(name) != null;
+    }
+
+    public int size() {
+        return tools.size();
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/tool/improvement/SelfDevelopmentTool.java ====================
+
+package com.atlas.app.tool.improvement;
+
+import com.atlas.app.improvement.AtlasDevelopmentEngine;
+import com.atlas.app.improvement.ImprovementSelfDevelopmentResult;
+import com.atlas.app.runtime.AtlasRuntime;
+import com.atlas.app.tool.AtlasTool;
+import com.atlas.app.tool.ToolResult;
+
+import java.io.File;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+public class SelfDevelopmentTool implements AtlasTool {
+
+    private final AtlasRuntime runtime;
+    private final AtlasDevelopmentEngine engine;
+
+    public SelfDevelopmentTool(AtlasRuntime runtime) {
+        this.runtime = runtime;
+        this.engine = new AtlasDevelopmentEngine();
+    }
+
+    @Override
+    public String getName() {
+        return "self_development";
+    }
+
+    @Override
+    public String getDescription() {
+        return "ATLAS'ın kendi kodunu LAB üzerinden güvenli şekilde geliştirme sistemi";
+    }
+
+    @Override
+    public ToolResult execute(
+            String action,
+            String... args
+    ) {
+        if (action == null || action.trim().isEmpty()) {
+            return ToolResult.failure(
+                    "Self-development action is empty",
+                    -1
+            );
+        }
+
+        if (!"develop".equalsIgnoreCase(action.trim())) {
+            return ToolResult.failure(
+                    "Unsupported self-development action: " + action,
+                    -2
+            );
+        }
+
+        if (runtime == null) {
+            return ToolResult.failure(
+                    "ATLAS runtime is missing",
+                    -3
+            );
+        }
+
+        if (args == null || args.length < 3) {
+            return ToolResult.failure(
+                    "Usage: tool self_development develop <title> <description> <affectedFiles>",
+                    -4
+            );
+        }
+
+        String title = args[0];
+        String description = args[1];
+
+        List<String> affectedFiles;
+
+        if (args[2].trim().isEmpty()) {
+            affectedFiles = Collections.emptyList();
+        } else {
+            affectedFiles = Arrays.asList(
+                    args[2].split(",")
+            );
+        }
+
+        String sourcePath =
+                runtime.getWorkingDirectory();
+
+        File source =
+                new File(sourcePath);
+
+        File parent =
+                source.getAbsoluteFile().getParentFile();
+
+        File labRoot =
+                new File(
+                        parent,
+                        "atlas-self-development-lab"
+                );
+
+        File target =
+                new File(
+                        parent,
+                        "atlas-self-development-target"
+                );
+
+        ImprovementSelfDevelopmentResult result =
+                engine.develop(
+                        title,
+                        description,
+                        affectedFiles,
+                        source.getAbsolutePath(),
+                        labRoot.getAbsolutePath(),
+                        target.getAbsolutePath()
+                );
+
+        if (result == null) {
+            return ToolResult.failure(
+                    "Self-development returned no result",
+                    -5
+            );
+        }
+
+        String message =
+                "Self-development: "
+                        + result.getStage()
+                        + " / "
+                        + result.getMessage();
+
+        if (result.isSuccess()) {
+            return ToolResult.success(message);
+        }
+
+        return ToolResult.failure(
+                message,
+                -6
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/runtime/AtlasRuntime.java ====================
+
+package com.atlas.app.runtime;
+
+import android.content.Context;
+
+import com.atlas.app.command.ShellCommandExecutor;
+import com.atlas.app.improvement.ImprovementObservation;
+import com.atlas.app.improvement.ImprovementObserver;
+import com.atlas.app.policy.PolicyDecision;
+import com.atlas.app.policy.PolicyEngine;
+import com.atlas.app.policy.PolicyRequest;
+import com.atlas.app.permission.PermissionResolver;
+import com.atlas.app.permission.PermissionType;
+import com.atlas.app.permission.PermissionChecker;
+import com.atlas.app.permission.PermissionState;
+import com.atlas.app.tool.AtlasTool;
+import com.atlas.app.tool.ToolRegistry;
+import com.atlas.app.tool.ToolResult;
+import com.atlas.app.tool.apps.AppsTool;
+import com.atlas.app.tool.screen.ScreenTool;
+import com.atlas.app.tool.control.ControlTool;
+import com.atlas.app.tool.improvement.SelfDevelopmentTool;
+
+public class AtlasRuntime {
+
+    private final ShellCommandExecutor shell;
+    private final ToolRegistry toolRegistry;
+    private final PolicyEngine policyEngine;
+    private final PermissionResolver permissionResolver;
+    private final PermissionChecker permissionChecker;
+    private final ImprovementObserver improvementObserver;
+
+    public AtlasRuntime(String workingDirectory) {
+        this(workingDirectory, null);
+    }
+
+    public AtlasRuntime(
+            String workingDirectory,
+            ImprovementObserver improvementObserver
+    ) {
+        this.shell = new ShellCommandExecutor(workingDirectory);
+        this.improvementObserver = improvementObserver;
+
+        this.toolRegistry = new ToolRegistry();
+        this.policyEngine = new PolicyEngine();
+        this.permissionResolver = new PermissionResolver();
+        this.permissionChecker = new PermissionChecker();
+        registerDefaultTools();
+    }
+
+    public AtlasRuntime(
+            Context context,
+            String workingDirectory
+    ) {
+        this.shell = new ShellCommandExecutor(workingDirectory);
+
+        this.toolRegistry = new ToolRegistry();
+        this.policyEngine = new PolicyEngine();
+        this.permissionResolver = new PermissionResolver();
+        this.permissionChecker = new PermissionChecker();
+        this.improvementObserver = null;
+        registerDefaultTools();
+
+        if (context != null) {
+            toolRegistry.register(
+                    new AppsTool(context)
+            );
+
+            toolRegistry.register(
+                    new ScreenTool(context)
+            );
+        }
+    }
+
+    private void registerDefaultTools() {
+        toolRegistry.register(new ControlTool());
+        toolRegistry.register(new SelfDevelopmentTool(this));
+    }
+
+    public ToolResult executeShell(String command) {
+        if (command == null || command.trim().isEmpty()) {
+            return ToolResult.failure(
+                    "Command is empty",
+                    -1
+            );
+        }
+
+        ShellCommandExecutor.Result result =
+                shell.execute(command);
+
+        if (result.exitCode == 0) {
+            return ToolResult.success(
+                    result.output.trim()
+            );
+        }
+
+        return ToolResult.failure(
+                result.output.trim(),
+                result.exitCode
+        );
+    }
+
+    public ToolResult executeTool(
+            String toolName,
+            String action,
+            String... args
+    ) {
+        PolicyDecision decision = policyEngine.evaluate(
+                new PolicyRequest(toolName, action, args)
+        );
+
+        if (decision == PolicyDecision.DENY) {
+            return reportToolFailure(
+                    ToolResult.failure(
+                            "Policy denied",
+                            -10
+                    )
+            );
+        }
+
+        if (decision == PolicyDecision.REQUIRE_PERMISSION) {
+            PermissionType permissionType =
+                    permissionResolver.resolve(toolName, action);
+
+            PermissionState permissionState =
+                    permissionChecker.check(permissionType);
+
+            if (permissionState != PermissionState.AVAILABLE) {
+                return reportToolFailure(
+                        ToolResult.failure(
+                                "Permission required: "
+                                        + permissionType.name()
+                                        + " ("
+                                        + toolName.trim()
+                                        + "/"
+                                        + action.trim()
+                                        + ")",
+                                -11
+                        )
+                );
+            }
+        }
+
+        AtlasTool tool = toolRegistry.get(toolName);
+
+        if (tool == null) {
+            return reportToolFailure(
+                    ToolResult.failure(
+                            "Tool not found: " + toolName,
+                            -1
+                    )
+            );
+        }
+
+        return reportToolFailure(
+                tool.execute(action, args)
+        );
+    }
+
+    private ToolResult reportToolFailure(ToolResult result) {
+        if (!result.success && improvementObserver != null) {
+            improvementObserver.onObservation(
+                    new ImprovementObservation(
+                            "runtime",
+                            result.output,
+                            "MEDIUM"
+                    )
+            );
+        }
+
+        return result;
+    }
+
+    public AtlasTool getTool(String toolName) {
+        return toolRegistry.get(toolName);
+    }
+
+    public ToolRegistry getToolRegistry() {
+        return toolRegistry;
+    }
+
+    public String getWorkingDirectory() {
+        return shell.getWorkingDirectory();
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementObservation.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementObservation {
+
+    private final String source;
+    private final String message;
+    private final String severity;
+
+    public ImprovementObservation(
+            String source,
+            String message,
+            String severity
+    ) {
+        this.source = source;
+        this.message = message;
+        this.severity = severity;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public String getSeverity() {
+        return severity;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementProposal.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementProposal {
+
+    private final String title;
+    private final String reason;
+    private final String suggestedAction;
+    private final ImprovementValidation validation;
+    private ImprovementProposalStatus status;
+
+    public ImprovementProposal(
+            String title,
+            String reason,
+            String suggestedAction,
+            ImprovementValidation validation
+    ) {
+        this.title = title;
+        this.reason = reason;
+        this.suggestedAction = suggestedAction;
+        this.validation = validation;
+        this.status = ImprovementProposalStatus.PROPOSED;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public String getSuggestedAction() {
+        return suggestedAction;
+    }
+
+    public ImprovementValidation getValidation() {
+        return validation;
+    }
+
+    public ImprovementProposalStatus getStatus() {
+        return status;
+    }
+
+    public void approve() {
+        if (status == ImprovementProposalStatus.PROPOSED) {
+            status = ImprovementProposalStatus.APPROVED;
+        }
+    }
+
+    public void reject() {
+        if (status == ImprovementProposalStatus.PROPOSED) {
+            status = ImprovementProposalStatus.REJECTED;
+        }
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/SelfImprovementEngine.java ====================
+
+package com.atlas.app.improvement;
+
+import com.atlas.app.ai.AIProviderRouter;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class SelfImprovementEngine implements ImprovementObserver {
+
+    private final List<ImprovementObservation> observations =
+            new ArrayList<>();
+
+    private final ImprovementMethodStore methodStore;
+    private final ImprovementTaskAnalyzer taskAnalyzer;
+    private final ImprovementMethodRunner methodRunner;
+    private final ImprovementChangeProposalGenerator changeProposalGenerator;
+    private final ImprovementChangeSafety changeSafety;
+    private final ImprovementSelfDevelopmentLoop selfDevelopmentLoop;
+
+    public SelfImprovementEngine() {
+        this(new ImprovementMethodStore());
+    }
+
+    public SelfImprovementEngine(
+            ImprovementMethodStore methodStore
+    ) {
+        this(
+                methodStore,
+                null
+        );
+    }
+
+    public SelfImprovementEngine(
+            ImprovementMethodStore methodStore,
+            AIProviderRouter router
+    ) {
+        this.methodStore = methodStore;
+        this.taskAnalyzer =
+                new ImprovementTaskAnalyzer(methodStore);
+        this.methodRunner =
+                new ImprovementMethodRunner(
+                        new ImprovementMethodRanker()
+                );
+
+        if (router != null) {
+            this.changeProposalGenerator =
+                    new ImprovementChangeProposalGenerator(
+                            router
+                    );
+
+            this.selfDevelopmentLoop =
+                    new ImprovementSelfDevelopmentLoop(
+                            methodStore,
+                            router
+                    );
+        } else {
+            this.changeProposalGenerator =
+                    new ImprovementChangeProposalGenerator();
+
+            this.selfDevelopmentLoop =
+                    new ImprovementSelfDevelopmentLoop(
+                            methodStore
+                    );
+        }
+
+        this.changeSafety =
+                new ImprovementChangeSafety();
+    }
+
+    public void observe(ImprovementObservation observation) {
+        if (observation == null) {
+            return;
+        }
+
+        observations.add(observation);
+    }
+
+    @Override
+    public void onObservation(
+            ImprovementObservation observation
+    ) {
+        observe(observation);
+    }
+
+    public List<ImprovementObservation> getObservations() {
+        return Collections.unmodifiableList(observations);
+    }
+
+    public ImprovementProposal analyze(
+            ImprovementObservation observation
+    ) {
+        if (observation == null) {
+            return null;
+        }
+
+        ImprovementValidation validation =
+                new ImprovementValidation(
+                        "Reproduce and test the observed problem",
+                        "The problem is reproducible and the proposed improvement passes validation"
+                );
+
+        return new ImprovementProposal(
+                "Investigate: " + observation.getMessage(),
+                "Observation from " + observation.getSource()
+                        + " with severity " + observation.getSeverity(),
+                "Investigate the observed problem and identify a minimal improvement.",
+                validation
+        );
+    }
+
+    public ImprovementFinding analyzeTask(
+            ImprovementTask task
+    ) {
+        return taskAnalyzer.analyze(task);
+    }
+
+    public ImprovementSelfDevelopmentResult executeSelfDevelopment(
+            ImprovementTask task,
+            List<String> affectedFiles,
+            String sourcePath,
+            String labRoot,
+            String targetPath,
+            ImprovementLabChangeApplier changeApplier
+    ) {
+        if (task == null) {
+            return new ImprovementSelfDevelopmentResult(
+                    false,
+                    "INPUT",
+                    "Improvement task is missing",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        }
+
+        ImprovementFinding finding =
+                analyzeTask(task);
+
+        if (finding == null) {
+            return new ImprovementSelfDevelopmentResult(
+                    false,
+                    "ANALYSIS",
+                    "Unable to analyze improvement task",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        }
+
+        return selfDevelopmentLoop.execute(
+                task,
+                finding,
+                affectedFiles,
+                sourcePath,
+                labRoot,
+                targetPath,
+                changeApplier
+        );
+    }
+
+
+
+    public ImprovementMethod executeTask(
+            ImprovementTask task,
+            ImprovementMethodExecutor executor
+    ) {
+        if (task == null) {
+            return null;
+        }
+
+        if (executor == null) {
+            return null;
+        }
+
+        return methodRunner.run(
+                methodStore.getAll(),
+                executor
+        );
+    }
+
+    public ImprovementChangeProposal proposeChange(
+            ImprovementTask task,
+            ImprovementFinding finding,
+            List<String> affectedFiles
+    ) {
+        return changeProposalGenerator.generate(
+                task,
+                finding,
+                affectedFiles
+        );
+    }
+
+    public ImprovementChangeSafetyReport evaluateChangeSafety(
+            ImprovementChangeProposal proposal
+    ) {
+        return changeSafety.evaluate(proposal);
+    }
+
+    public void addMethod(
+            ImprovementMethod method
+    ) {
+        methodStore.add(method);
+    }
+
+    public ImprovementMethodStore getMethodStore() {
+        return methodStore;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementObservationCollector.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementObservationCollector {
+
+    public ImprovementObservation collect(
+            String source,
+            String message,
+            String severity
+    ) {
+        if (source == null || source.trim().isEmpty()) {
+            return null;
+        }
+
+        if (message == null || message.trim().isEmpty()) {
+            return null;
+        }
+
+        if (severity == null || severity.trim().isEmpty()) {
+            return null;
+        }
+
+        return new ImprovementObservation(
+                source.trim(),
+                message.trim(),
+                severity.trim()
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementValidation.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementValidation {
+
+    private final String criteria;
+    private final String expectedResult;
+
+    public ImprovementValidation(
+            String criteria,
+            String expectedResult
+    ) {
+        this.criteria = criteria;
+        this.expectedResult = expectedResult;
+    }
+
+    public String getCriteria() {
+        return criteria;
+    }
+
+    public String getExpectedResult() {
+        return expectedResult;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementProposalStatus.java ====================
+
+package com.atlas.app.improvement;
+
+public enum ImprovementProposalStatus {
+    PROPOSED,
+    APPROVED,
+    REJECTED
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementObserver.java ====================
+
+package com.atlas.app.improvement;
+
+public interface ImprovementObserver {
+
+    void onObservation(ImprovementObservation observation);
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementMethod.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementMethod {
+
+    private final String name;
+    private final String description;
+    private final String source;
+    private final String requirements;
+    private final String risk;
+    private int successCount;
+    private int failureCount;
+
+    public ImprovementMethod(
+            String name,
+            String description,
+            String source,
+            String requirements,
+            String risk
+    ) {
+        this.name = name;
+        this.description = description;
+        this.source = source;
+        this.requirements = requirements;
+        this.risk = risk;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public String getRequirements() {
+        return requirements;
+    }
+
+    public String getRisk() {
+        return risk;
+    }
+
+    public int getSuccessCount() {
+        return successCount;
+    }
+
+    public int getFailureCount() {
+        return failureCount;
+    }
+
+    public void recordSuccess() {
+        successCount++;
+    }
+
+    public void recordFailure() {
+        failureCount++;
+    }
+
+    public int getScore() {
+        return successCount - failureCount;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementMethodStore.java ====================
+
+package com.atlas.app.improvement;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class ImprovementMethodStore {
+
+    private final List<ImprovementMethod> methods =
+            new ArrayList<>();
+
+    public void add(ImprovementMethod method) {
+        if (method == null) {
+            return;
+        }
+
+        methods.add(method);
+    }
+
+    public List<ImprovementMethod> getAll() {
+        return Collections.unmodifiableList(methods);
+    }
+
+    public ImprovementMethod findBest() {
+        ImprovementMethod best = null;
+
+        for (ImprovementMethod method : methods) {
+            if (best == null || method.getScore() > best.getScore()) {
+                best = method;
+            }
+        }
+
+        return best;
+    }
+
+    public int size() {
+        return methods.size();
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementTask.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementTask {
+
+    private final String title;
+    private final String description;
+
+    public ImprovementTask(String title, String description) {
+        this.title = title;
+        this.description = description;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementFinding.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementFinding {
+
+    private final String area;
+    private final String problem;
+    private final String recommendation;
+
+    public ImprovementFinding(
+            String area,
+            String problem,
+            String recommendation
+    ) {
+        this.area = area;
+        this.problem = problem;
+        this.recommendation = recommendation;
+    }
+
+    public String getArea() {
+        return area;
+    }
+
+    public String getProblem() {
+        return problem;
+    }
+
+    public String getRecommendation() {
+        return recommendation;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementTaskAnalyzer.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementTaskAnalyzer {
+
+    private final ImprovementMethodStore methodStore;
+
+    public ImprovementTaskAnalyzer(
+            ImprovementMethodStore methodStore
+    ) {
+        this.methodStore = methodStore;
+    }
+
+    public ImprovementFinding analyze(ImprovementTask task) {
+        if (task == null) {
+            return null;
+        }
+
+        ImprovementMethod method = methodStore.findBest();
+
+        String recommendation;
+
+        if (method != null) {
+            recommendation =
+                    "Use method: " + method.getName();
+        } else {
+            recommendation =
+                    "Inspect the ATLAS codebase and identify a suitable method.";
+        }
+
+        return new ImprovementFinding(
+                "ATLAS",
+                task.getDescription(),
+                recommendation
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementMethodRanker.java ====================
+
+package com.atlas.app.improvement;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
+public class ImprovementMethodRanker {
+
+    public List<ImprovementMethod> rank(
+            List<ImprovementMethod> methods
+    ) {
+        if (methods == null || methods.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<ImprovementMethod> ranked =
+                new ArrayList<>(methods);
+
+        ranked.sort(
+                Comparator.comparingInt(
+                        ImprovementMethod::getScore
+                ).reversed()
+        );
+
+        return Collections.unmodifiableList(ranked);
+    }
+
+    public ImprovementMethod best(
+            List<ImprovementMethod> methods
+    ) {
+        List<ImprovementMethod> ranked = rank(methods);
+
+        if (ranked.isEmpty()) {
+            return null;
+        }
+
+        return ranked.get(0);
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementMethodExecutor.java ====================
+
+package com.atlas.app.improvement;
+
+public interface ImprovementMethodExecutor {
+
+    boolean execute(ImprovementMethod method);
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementMethodRunner.java ====================
+
+package com.atlas.app.improvement;
+
+import java.util.List;
+
+public class ImprovementMethodRunner {
+
+    private final ImprovementMethodRanker ranker;
+
+    public ImprovementMethodRunner(
+            ImprovementMethodRanker ranker
+    ) {
+        this.ranker = ranker;
+    }
+
+    public ImprovementMethod run(
+            List<ImprovementMethod> methods,
+            ImprovementMethodExecutor executor
+    ) {
+        if (methods == null || methods.isEmpty()) {
+            return null;
+        }
+
+        if (executor == null) {
+            return null;
+        }
+
+        List<ImprovementMethod> ranked =
+                ranker.rank(methods);
+
+        for (ImprovementMethod method : ranked) {
+            boolean success = executor.execute(method);
+
+            if (success) {
+                method.recordSuccess();
+                return method;
+            }
+
+            method.recordFailure();
+        }
+
+        return null;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementChangeProposalStatus.java ====================
+
+package com.atlas.app.improvement;
+
+public enum ImprovementChangeProposalStatus {
+    PROPOSED,
+    APPROVED,
+    REJECTED
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementChangeProposal.java ====================
+
+package com.atlas.app.improvement;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+public class ImprovementChangeProposal {
+
+    private final String what;
+    private final String why;
+    private final List<String> affectedFiles;
+    private final String expectedResult;
+    private final String risk;
+    private final boolean reversible;
+    private final ImprovementValidation validation;
+    private final Map<String, String> proposedFileContents;
+
+    private ImprovementChangeProposalStatus status =
+            ImprovementChangeProposalStatus.PROPOSED;
+
+    public ImprovementChangeProposal(
+            String what,
+            String why,
+            List<String> affectedFiles,
+            String expectedResult,
+            String risk,
+            boolean reversible,
+            ImprovementValidation validation
+    ) {
+        this(
+                what,
+                why,
+                affectedFiles,
+                expectedResult,
+                risk,
+                reversible,
+                validation,
+                Collections.emptyMap()
+        );
+    }
+
+    public ImprovementChangeProposal(
+            String what,
+            String why,
+            List<String> affectedFiles,
+            String expectedResult,
+            String risk,
+            boolean reversible,
+            ImprovementValidation validation,
+            Map<String, String> proposedFileContents
+    ) {
+        this.what = what;
+        this.why = why;
+        this.affectedFiles =
+                affectedFiles == null
+                        ? Collections.emptyList()
+                        : Collections.unmodifiableList(
+                                new ArrayList<>(affectedFiles)
+                        );
+        this.expectedResult = expectedResult;
+        this.risk = risk;
+        this.reversible = reversible;
+        this.validation = validation;
+        this.proposedFileContents =
+                proposedFileContents == null
+                        ? Collections.emptyMap()
+                        : Collections.unmodifiableMap(
+                                new java.util.HashMap<>(
+                                        proposedFileContents
+                                )
+                        );
+    }
+
+    public String getWhat() {
+        return what;
+    }
+
+    public String getWhy() {
+        return why;
+    }
+
+    public List<String> getAffectedFiles() {
+        return affectedFiles;
+    }
+
+    public String getExpectedResult() {
+        return expectedResult;
+    }
+
+    public String getRisk() {
+        return risk;
+    }
+
+    public boolean isReversible() {
+        return reversible;
+    }
+
+    public ImprovementValidation getValidation() {
+        return validation;
+    }
+
+    public Map<String, String> getProposedFileContents() {
+        return proposedFileContents;
+    }
+
+    public ImprovementChangeProposalStatus getStatus() {
+        return status;
+    }
+
+    public void approve() {
+        if (status == ImprovementChangeProposalStatus.PROPOSED) {
+            status = ImprovementChangeProposalStatus.APPROVED;
+        }
+    }
+
+    public void reject() {
+        if (status == ImprovementChangeProposalStatus.PROPOSED) {
+            status = ImprovementChangeProposalStatus.REJECTED;
+        }
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementChangeProposalGenerator.java ====================
+
+package com.atlas.app.improvement;
+
+import com.atlas.app.codegen.CodeChangeSet;
+import com.atlas.app.codegen.CodeGenerationEngine;
+import com.atlas.app.codegen.CodeGenerationRequest;
+import com.atlas.app.codegen.CodeGenerator;
+import com.atlas.app.codegen.RouterAICodeGenerator;
+import com.atlas.app.codegen.RuleBasedCodeGenerator;
+import com.atlas.app.ai.AIProviderRouter;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+public class ImprovementChangeProposalGenerator {
+
+    private final CodeGenerationEngine codeGenerationEngine;
+
+    public ImprovementChangeProposalGenerator() {
+        this.codeGenerationEngine =
+                new CodeGenerationEngine(
+                        new RuleBasedCodeGenerator()
+                );
+    }
+
+    public ImprovementChangeProposalGenerator(AIProviderRouter router) {
+        CodeGenerator fallback = new RuleBasedCodeGenerator();
+
+        this.codeGenerationEngine =
+                new CodeGenerationEngine(
+                        new RouterAICodeGenerator(
+                                router,
+                                fallback
+                        )
+                );
+    }
+
+    public ImprovementChangeProposal generate(
+            ImprovementTask task,
+            ImprovementFinding finding,
+            List<String> affectedFiles
+    ) {
+        return generate(
+                task,
+                finding,
+                affectedFiles,
+                null
+        );
+    }
+
+    public ImprovementChangeProposal generate(
+            ImprovementTask task,
+            ImprovementFinding finding,
+            List<String> affectedFiles,
+            String sourcePath
+    ) {
+        if (task == null || finding == null) {
+            return null;
+        }
+
+        ImprovementValidation validation =
+                new ImprovementValidation(
+                        "Build and test the proposed change",
+                        "The proposed change passes validation without introducing regressions"
+                );
+
+        String what =
+                "Improve " + finding.getArea()
+                        + " by addressing: "
+                        + finding.getProblem();
+
+        String why =
+                task.getDescription();
+
+        String expectedResult =
+                finding.getRecommendation();
+
+        List<String> files =
+                affectedFiles == null
+                        ? Collections.emptyList()
+                        : affectedFiles;
+
+        CodeGenerationRequest request =
+                new CodeGenerationRequest(
+                        task.getDescription(),
+                        sourcePath,
+                        files
+                );
+
+        CodeChangeSet changeSet =
+                codeGenerationEngine.generate(request);
+
+        Map<String, String> proposedFileContents =
+                changeSet.getFileContents();
+
+        java.util.LinkedHashSet<String> generatedFiles =
+                new java.util.LinkedHashSet<>(files);
+
+        generatedFiles.addAll(proposedFileContents.keySet());
+
+        return new ImprovementChangeProposal(
+                what,
+                why,
+                new java.util.ArrayList<>(generatedFiles),
+                expectedResult,
+                "MEDIUM",
+                true,
+                validation,
+                proposedFileContents
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementChangeSafetyDecision.java ====================
+
+package com.atlas.app.improvement;
+
+public enum ImprovementChangeSafetyDecision {
+    ALLOW,
+    DENY,
+    REQUIRE_REVIEW
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementChangeSafetyReport.java ====================
+
+package com.atlas.app.improvement;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class ImprovementChangeSafetyReport {
+
+    private final ImprovementChangeSafetyDecision decision;
+    private final String reason;
+    private final String impact;
+    private final String risk;
+    private final boolean reversible;
+    private final List<String> requiredPermissions;
+    private final ImprovementValidation validation;
+
+    public ImprovementChangeSafetyReport(
+            ImprovementChangeSafetyDecision decision,
+            String reason,
+            String impact,
+            String risk,
+            boolean reversible,
+            List<String> requiredPermissions,
+            ImprovementValidation validation
+    ) {
+        this.decision = decision;
+        this.reason = reason;
+        this.impact = impact;
+        this.risk = risk;
+        this.reversible = reversible;
+        this.requiredPermissions =
+                requiredPermissions == null
+                        ? Collections.emptyList()
+                        : Collections.unmodifiableList(
+                                new ArrayList<>(requiredPermissions)
+                        );
+        this.validation = validation;
+    }
+
+    public ImprovementChangeSafetyDecision getDecision() {
+        return decision;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public String getImpact() {
+        return impact;
+    }
+
+    public String getRisk() {
+        return risk;
+    }
+
+    public boolean isReversible() {
+        return reversible;
+    }
+
+    public List<String> getRequiredPermissions() {
+        return requiredPermissions;
+    }
+
+    public ImprovementValidation getValidation() {
+        return validation;
+    }
+
+    public boolean isAllowed() {
+        return decision == ImprovementChangeSafetyDecision.ALLOW;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementChangeSafety.java ====================
+
+package com.atlas.app.improvement;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class ImprovementChangeSafety {
+
+    public ImprovementChangeSafetyReport evaluate(
+            ImprovementChangeProposal proposal
+    ) {
+        if (proposal == null) {
+            return report(
+                    ImprovementChangeSafetyDecision.DENY,
+                    "Change proposal is missing",
+                    "No change will be evaluated",
+                    "HIGH",
+                    false,
+                    Collections.emptyList(),
+                    null
+            );
+        }
+
+        if (isBlank(proposal.getWhat())
+                || isBlank(proposal.getWhy())) {
+            return report(
+                    ImprovementChangeSafetyDecision.DENY,
+                    "Change proposal is incomplete",
+                    "The proposed change cannot be evaluated reliably",
+                    "HIGH",
+                    proposal.isReversible(),
+                    Collections.emptyList(),
+                    proposal.getValidation()
+            );
+        }
+
+        if (proposal.getAffectedFiles().isEmpty()) {
+            return report(
+                    ImprovementChangeSafetyDecision.REQUIRE_REVIEW,
+                    "No affected files were identified",
+                    "The scope of the change is unknown",
+                    proposal.getRisk(),
+                    proposal.isReversible(),
+                    Collections.emptyList(),
+                    proposal.getValidation()
+            );
+        }
+
+        if (isBlank(proposal.getExpectedResult())
+                || proposal.getValidation() == null) {
+            return report(
+                    ImprovementChangeSafetyDecision.REQUIRE_REVIEW,
+                    "Validation information is incomplete",
+                    "The change cannot be automatically verified",
+                    proposal.getRisk(),
+                    proposal.isReversible(),
+                    Collections.emptyList(),
+                    proposal.getValidation()
+            );
+        }
+
+        String normalizedRisk =
+                proposal.getRisk() == null
+                        ? ""
+                        : proposal.getRisk().trim().toUpperCase();
+
+        if ("HIGH".equals(normalizedRisk)
+                || !proposal.isReversible()) {
+            return report(
+                    ImprovementChangeSafetyDecision.REQUIRE_REVIEW,
+                    "The change has high risk or is not reversible",
+                    "The change requires additional review before execution",
+                    normalizedRisk.isEmpty()
+                            ? "HIGH"
+                            : normalizedRisk,
+                    proposal.isReversible(),
+                    Collections.emptyList(),
+                    proposal.getValidation()
+            );
+        }
+
+        return report(
+                ImprovementChangeSafetyDecision.ALLOW,
+                "Change proposal passed deterministic safety checks",
+                "The change has a defined scope, expected result and validation path",
+                normalizedRisk.isEmpty()
+                        ? "UNKNOWN"
+                        : normalizedRisk,
+                proposal.isReversible(),
+                Collections.emptyList(),
+                proposal.getValidation()
+        );
+    }
+
+    private ImprovementChangeSafetyReport report(
+            ImprovementChangeSafetyDecision decision,
+            String reason,
+            String impact,
+            String risk,
+            boolean reversible,
+            List<String> permissions,
+            ImprovementValidation validation
+    ) {
+        return new ImprovementChangeSafetyReport(
+                decision,
+                reason,
+                impact,
+                risk,
+                reversible,
+                permissions,
+                validation
+        );
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementLabStatus.java ====================
+
+package com.atlas.app.improvement;
+
+public enum ImprovementLabStatus {
+    CREATED,
+    READY,
+    CHANGED,
+    VALIDATED,
+    PROMOTED,
+    FAILED,
+    ROLLED_BACK
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementLabWorkspace.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementLabWorkspace {
+
+    private final String id;
+    private final String sourcePath;
+    private final String workspacePath;
+    private final String snapshotId;
+    private final String snapshotPath;
+
+    private ImprovementLabStatus status =
+            ImprovementLabStatus.CREATED;
+
+    public ImprovementLabWorkspace(
+            String id,
+            String sourcePath,
+            String workspacePath,
+            String snapshotId
+    ) {
+        this(
+                id,
+                sourcePath,
+                workspacePath,
+                snapshotId,
+                null
+        );
+    }
+
+    public ImprovementLabWorkspace(
+            String id,
+            String sourcePath,
+            String workspacePath,
+            String snapshotId,
+            String snapshotPath
+    ) {
+        this.id = id;
+        this.sourcePath = sourcePath;
+        this.workspacePath = workspacePath;
+        this.snapshotId = snapshotId;
+        this.snapshotPath = snapshotPath;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public String getSourcePath() {
+        return sourcePath;
+    }
+
+    public String getWorkspacePath() {
+        return workspacePath;
+    }
+
+    public String getSnapshotId() {
+        return snapshotId;
+    }
+
+    public String getSnapshotPath() {
+        return snapshotPath;
+    }
+
+    public ImprovementLabStatus getStatus() {
+        return status;
+    }
+
+    public void markReady() {
+        if (status == ImprovementLabStatus.CREATED) {
+            status = ImprovementLabStatus.READY;
+        }
+    }
+
+    public void markChanged() {
+        if (status == ImprovementLabStatus.READY) {
+            status = ImprovementLabStatus.CHANGED;
+        }
+    }
+
+    public void markValidated() {
+        if (status == ImprovementLabStatus.CHANGED) {
+            status = ImprovementLabStatus.VALIDATED;
+        }
+    }
+
+    public void markPromoted() {
+        if (status == ImprovementLabStatus.VALIDATED) {
+            status = ImprovementLabStatus.PROMOTED;
+        }
+    }
+
+    public void markFailed() {
+        status = ImprovementLabStatus.FAILED;
+    }
+
+    public void markRolledBack() {
+        status = ImprovementLabStatus.ROLLED_BACK;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementLabManager.java ====================
+
+package com.atlas.app.improvement;
+
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.UUID;
+
+public class ImprovementLabManager {
+
+    public ImprovementLabWorkspace createWorkspace(
+            ImprovementChangeProposal proposal,
+            String sourcePath,
+            String labRoot
+    ) {
+        if (proposal == null) return null;
+
+        if (sourcePath == null || sourcePath.trim().isEmpty()) {
+            return null;
+        }
+
+        if (labRoot == null || labRoot.trim().isEmpty()) {
+            return null;
+        }
+
+        Path source = Paths.get(sourcePath.trim());
+        Path root = Paths.get(labRoot.trim());
+
+        if (!Files.exists(source)) {
+            return null;
+        }
+
+        if (!Files.isDirectory(source)) {
+            return null;
+        }
+
+        String id = "lab-" + UUID.randomUUID();
+        String snapshotId = "snapshot-" + id;
+
+        Path workspace = root.resolve(id);
+        Path snapshotRoot =
+                root.resolve("snapshots").resolve(snapshotId);
+
+        try {
+            Files.createDirectories(root);
+            Files.createDirectories(workspace);
+            Files.createDirectories(snapshotRoot);
+
+            copyDirectoryContents(source, workspace);
+            copyDirectoryContents(source, snapshotRoot);
+
+            ImprovementLabWorkspace result =
+                    new ImprovementLabWorkspace(
+                            id,
+                            source.toString(),
+                            workspace.toString(),
+                            snapshotId,
+                            snapshotRoot.toString()
+                    );
+
+            result.markReady();
+
+            return result;
+
+        } catch (IOException e) {
+            deleteIfExists(workspace);
+            deleteIfExists(snapshotRoot);
+            return null;
+        }
+    }
+
+    public boolean archiveFailedWorkspace(
+            ImprovementLabWorkspace workspace,
+            String labRoot
+    ) {
+        if (workspace == null) return false;
+
+        if (workspace.getStatus()
+                != ImprovementLabStatus.FAILED) {
+            return false;
+        }
+
+        if (labRoot == null || labRoot.trim().isEmpty()) {
+            return false;
+        }
+
+        Path current =
+                Paths.get(workspace.getWorkspacePath());
+
+        Path archive =
+                Paths.get(labRoot.trim())
+                        .resolve("archive")
+                        .resolve(workspace.getId());
+
+        try {
+            if (!Files.exists(current)) {
+                return false;
+            }
+
+            Files.createDirectories(archive.getParent());
+
+            Files.move(
+                    current,
+                    archive,
+                    StandardCopyOption.ATOMIC_MOVE
+            );
+
+            return true;
+
+        } catch (IOException atomicMoveFailure) {
+            try {
+                copyDirectory(current, archive);
+                deleteIfExists(current);
+                return true;
+            } catch (IOException fallbackFailure) {
+                return false;
+            }
+        }
+    }
+
+    private void copyDirectoryContents(
+            Path source,
+            Path target
+    ) throws IOException {
+        Files.walkFileTree(
+                source,
+                new SimpleFileVisitor<Path>() {
+
+                    @Override
+                    public FileVisitResult preVisitDirectory(
+                            Path dir,
+                            BasicFileAttributes attrs
+                    ) throws IOException {
+                        Path relative =
+                                source.relativize(dir);
+
+                        Path destination =
+                                target.resolve(relative);
+
+                        Files.createDirectories(destination);
+
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult visitFile(
+                            Path file,
+                            BasicFileAttributes attrs
+                    ) throws IOException {
+                        Path relative =
+                                source.relativize(file);
+
+                        Path destination =
+                                target.resolve(relative);
+
+                        Files.createDirectories(
+                                destination.getParent()
+                        );
+
+                        Files.copy(
+                                file,
+                                destination,
+                                StandardCopyOption.REPLACE_EXISTING
+                        );
+
+                        return FileVisitResult.CONTINUE;
+                    }
+                }
+        );
+    }
+
+    private void copyDirectory(
+            Path source,
+            Path target
+    ) throws IOException {
+        Files.createDirectories(target);
+        copyDirectoryContents(source, target);
+    }
+
+    private void deleteIfExists(Path path) {
+        if (path == null || !Files.exists(path)) {
+            return;
+        }
+
+        try {
+            Files.walkFileTree(
+                    path,
+                    new SimpleFileVisitor<Path>() {
+
+                        @Override
+                        public FileVisitResult visitFile(
+                                Path file,
+                                BasicFileAttributes attrs
+                        ) throws IOException {
+                            Files.deleteIfExists(file);
+                            return FileVisitResult.CONTINUE;
+                        }
+
+                        @Override
+                        public FileVisitResult postVisitDirectory(
+                                Path dir,
+                                IOException exception
+                        ) throws IOException {
+                            Files.deleteIfExists(dir);
+                            return FileVisitResult.CONTINUE;
+                        }
+                    }
+            );
+        } catch (IOException ignored) {
+            // Cleanup failure must not hide the original failure.
+        }
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementLabBuildResult.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementLabBuildResult {
+
+    private final boolean buildSuccess;
+    private final boolean testSuccess;
+    private final int buildExitCode;
+    private final int testExitCode;
+    private final String buildOutput;
+    private final String testOutput;
+
+    public ImprovementLabBuildResult(
+            boolean buildSuccess,
+            boolean testSuccess,
+            int buildExitCode,
+            int testExitCode,
+            String buildOutput,
+            String testOutput
+    ) {
+        this.buildSuccess = buildSuccess;
+        this.testSuccess = testSuccess;
+        this.buildExitCode = buildExitCode;
+        this.testExitCode = testExitCode;
+        this.buildOutput = buildOutput;
+        this.testOutput = testOutput;
+    }
+
+    public boolean isBuildSuccess() {
+        return buildSuccess;
+    }
+
+    public boolean isTestSuccess() {
+        return testSuccess;
+    }
+
+    public int getBuildExitCode() {
+        return buildExitCode;
+    }
+
+    public int getTestExitCode() {
+        return testExitCode;
+    }
+
+    public String getBuildOutput() {
+        return buildOutput;
+    }
+
+    public String getTestOutput() {
+        return testOutput;
+    }
+
+    public boolean isSuccessful() {
+        return buildSuccess && testSuccess;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementLabBuildExecutor.java ====================
+
+package com.atlas.app.improvement;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+public class ImprovementLabBuildExecutor {
+
+    public ImprovementLabBuildResult buildAndTest(
+            ImprovementLabWorkspace workspace
+    ) {
+        if (workspace == null) {
+            return failure(
+                    "LAB workspace is missing",
+                    -1
+            );
+        }
+
+        Path labPath =
+                Paths.get(workspace.getWorkspacePath())
+                        .toAbsolutePath()
+                        .normalize();
+
+        if (!Files.isDirectory(labPath)) {
+            return failure(
+                    "LAB workspace does not exist",
+                    -1
+            );
+        }
+
+        if (!Files.exists(labPath.resolve("settings.gradle"))
+                && !Files.exists(labPath.resolve("settings.gradle.kts"))) {
+            return failure(
+                    "LAB workspace is not a Gradle project",
+                    -1
+            );
+        }
+
+        CommandResult build =
+                execute(
+                        labPath,
+                        "gradle",
+                        ":app:assembleDebug"
+                );
+
+        if (!build.success) {
+            return new ImprovementLabBuildResult(
+                    false,
+                    false,
+                    build.exitCode,
+                    -1,
+                    build.output,
+                    ""
+            );
+        }
+
+        CommandResult test =
+                execute(
+                        labPath,
+                        "gradle",
+                        ":app:test"
+                );
+
+        return new ImprovementLabBuildResult(
+                true,
+                test.success,
+                build.exitCode,
+                test.exitCode,
+                build.output,
+                test.output
+        );
+    }
+
+    private CommandResult execute(
+            Path workingDirectory,
+            String command,
+            String argument
+    ) {
+        ProcessBuilder builder =
+                new ProcessBuilder(
+                        command,
+                        argument
+                );
+
+        builder.directory(
+                workingDirectory.toFile()
+        );
+
+        builder.redirectErrorStream(true);
+
+        StringBuilder output =
+                new StringBuilder();
+
+        try {
+            Process process =
+                    builder.start();
+
+            try (BufferedReader reader =
+                         new BufferedReader(
+                                 new InputStreamReader(
+                                         process.getInputStream()
+                                 )
+                         )) {
+
+                String line;
+
+                while ((line = reader.readLine()) != null) {
+                    output.append(line)
+                            .append('\n');
+                }
+            }
+
+            int exitCode =
+                    process.waitFor();
+
+            return new CommandResult(
+                    exitCode == 0,
+                    exitCode,
+                    output.toString()
+            );
+
+        } catch (IOException e) {
+            return new CommandResult(
+                    false,
+                    -1,
+                    e.toString()
+            );
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+
+            return new CommandResult(
+                    false,
+                    -1,
+                    "Process interrupted: " + e
+            );
+        }
+    }
+
+    private ImprovementLabBuildResult failure(
+            String message,
+            int exitCode
+    ) {
+        return new ImprovementLabBuildResult(
+                false,
+                false,
+                exitCode,
+                -1,
+                message,
+                ""
+        );
+    }
+
+    private static class CommandResult {
+
+        private final boolean success;
+        private final int exitCode;
+        private final String output;
+
+        private CommandResult(
+                boolean success,
+                int exitCode,
+                String output
+        ) {
+            this.success = success;
+            this.exitCode = exitCode;
+            this.output = output;
+        }
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementLabEvaluationResult.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementLabEvaluationResult {
+
+    private final boolean passed;
+    private final ImprovementLabStatus status;
+    private final String reason;
+    private final String buildOutput;
+    private final String testOutput;
+
+    public ImprovementLabEvaluationResult(
+            boolean passed,
+            ImprovementLabStatus status,
+            String reason,
+            String buildOutput,
+            String testOutput
+    ) {
+        this.passed = passed;
+        this.status = status;
+        this.reason = reason;
+        this.buildOutput = buildOutput;
+        this.testOutput = testOutput;
+    }
+
+    public boolean isPassed() {
+        return passed;
+    }
+
+    public ImprovementLabStatus getStatus() {
+        return status;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public String getBuildOutput() {
+        return buildOutput;
+    }
+
+    public String getTestOutput() {
+        return testOutput;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementLabEvaluator.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementLabEvaluator {
+
+    public ImprovementLabEvaluationResult evaluate(
+            ImprovementLabWorkspace workspace,
+            ImprovementLabBuildResult buildResult
+    ) {
+        if (workspace == null) {
+            return failed(
+                    "LAB workspace is missing",
+                    "",
+                    ""
+            );
+        }
+
+        if (buildResult == null) {
+            workspace.markFailed();
+
+            return failed(
+                    "LAB build result is missing",
+                    "",
+                    ""
+            );
+        }
+
+        if (!buildResult.isBuildSuccess()) {
+            workspace.markFailed();
+
+            return failed(
+                    "LAB build failed",
+                    buildResult.getBuildOutput(),
+                    buildResult.getTestOutput()
+            );
+        }
+
+        if (!buildResult.isTestSuccess()) {
+            workspace.markFailed();
+
+            return failed(
+                    "LAB tests failed",
+                    buildResult.getBuildOutput(),
+                    buildResult.getTestOutput()
+            );
+        }
+
+        workspace.markChanged();
+        workspace.markValidated();
+
+        return new ImprovementLabEvaluationResult(
+                true,
+                ImprovementLabStatus.VALIDATED,
+                "LAB build and tests passed",
+                buildResult.getBuildOutput(),
+                buildResult.getTestOutput()
+        );
+    }
+
+    private ImprovementLabEvaluationResult failed(
+            String reason,
+            String buildOutput,
+            String testOutput
+    ) {
+        return new ImprovementLabEvaluationResult(
+                false,
+                ImprovementLabStatus.FAILED,
+                reason,
+                buildOutput,
+                testOutput
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementLabPromotionResult.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementLabPromotionResult {
+
+    private final boolean success;
+    private final String reason;
+    private final String sourcePath;
+    private final String targetPath;
+
+    public ImprovementLabPromotionResult(
+            boolean success,
+            String reason,
+            String sourcePath,
+            String targetPath
+    ) {
+        this.success = success;
+        this.reason = reason;
+        this.sourcePath = sourcePath;
+        this.targetPath = targetPath;
+    }
+
+    public boolean isSuccess() {
+        return success;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public String getSourcePath() {
+        return sourcePath;
+    }
+
+    public String getTargetPath() {
+        return targetPath;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementLabPromoter.java ====================
+
+package com.atlas.app.improvement;
+
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
+
+public class ImprovementLabPromoter {
+
+    public ImprovementLabPromotionResult promote(
+            ImprovementLabWorkspace workspace,
+            String targetPath
+    ) {
+        if (workspace == null) {
+            return failure(
+                    "LAB workspace is missing",
+                    "",
+                    targetPath
+            );
+        }
+
+        if (workspace.getStatus()
+                != ImprovementLabStatus.VALIDATED) {
+
+            return failure(
+                    "LAB workspace is not validated",
+                    workspace.getWorkspacePath(),
+                    targetPath
+            );
+        }
+
+        if (targetPath == null
+                || targetPath.trim().isEmpty()) {
+
+            return failure(
+                    "Promotion target is missing",
+                    workspace.getWorkspacePath(),
+                    targetPath
+            );
+        }
+
+        Path source =
+                Paths.get(workspace.getWorkspacePath())
+                        .toAbsolutePath()
+                        .normalize();
+
+        Path target =
+                Paths.get(targetPath)
+                        .toAbsolutePath()
+                        .normalize();
+
+        if (!Files.isDirectory(source)) {
+            return failure(
+                    "LAB workspace does not exist",
+                    source.toString(),
+                    target.toString()
+            );
+        }
+
+        if (!Files.isDirectory(target)) {
+            return failure(
+                    "Promotion target does not exist",
+                    source.toString(),
+                    target.toString()
+            );
+        }
+
+        try {
+            copyDirectory(source, target);
+
+            workspace.markPromoted();
+
+            return new ImprovementLabPromotionResult(
+                    true,
+                    "LAB workspace promoted successfully",
+                    source.toString(),
+                    target.toString()
+            );
+
+        } catch (IOException e) {
+            return failure(
+                    "Promotion failed: " + e,
+                    source.toString(),
+                    target.toString()
+            );
+        }
+    }
+
+    private ImprovementLabPromotionResult failure(
+            String reason,
+            String sourcePath,
+            String targetPath
+    ) {
+        return new ImprovementLabPromotionResult(
+                false,
+                reason,
+                sourcePath,
+                targetPath
+        );
+    }
+
+    private void copyDirectory(
+            Path source,
+            Path target
+    ) throws IOException {
+
+        Files.walkFileTree(
+                source,
+                new SimpleFileVisitor<Path>() {
+
+                    @Override
+                    public FileVisitResult preVisitDirectory(
+                            Path directory,
+                            BasicFileAttributes attributes
+                    ) throws IOException {
+
+                        Path relative =
+                                source.relativize(directory);
+
+                        Path destination =
+                                target.resolve(relative);
+
+                        Files.createDirectories(destination);
+
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult visitFile(
+                            Path file,
+                            BasicFileAttributes attributes
+                    ) throws IOException {
+
+                        Path relative =
+                                source.relativize(file);
+
+                        Path destination =
+                                target.resolve(relative);
+
+                        Files.createDirectories(
+                                destination.getParent()
+                        );
+
+                        Files.copy(
+                                file,
+                                destination,
+                                StandardCopyOption.REPLACE_EXISTING,
+                                StandardCopyOption.COPY_ATTRIBUTES
+                        );
+
+                        return FileVisitResult.CONTINUE;
+                    }
+                }
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementLearningResult.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementLearningResult {
+
+    private final boolean recorded;
+    private final String methodName;
+    private final boolean success;
+    private final int score;
+    private final String message;
+
+    public ImprovementLearningResult(
+            boolean recorded,
+            String methodName,
+            boolean success,
+            int score,
+            String message
+    ) {
+        this.recorded = recorded;
+        this.methodName = methodName;
+        this.success = success;
+        this.score = score;
+        this.message = message;
+    }
+
+    public boolean isRecorded() {
+        return recorded;
+    }
+
+    public String getMethodName() {
+        return methodName;
+    }
+
+    public boolean isSuccess() {
+        return success;
+    }
+
+    public int getScore() {
+        return score;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementLearning.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementLearning {
+
+    private final ImprovementMethodStore methodStore;
+
+    public ImprovementLearning(
+            ImprovementMethodStore methodStore
+    ) {
+        this.methodStore = methodStore;
+    }
+
+    public ImprovementLearningResult record(
+            ImprovementMethod method,
+            boolean success
+    ) {
+        if (method == null) {
+            return new ImprovementLearningResult(
+                    false,
+                    "",
+                    success,
+                    0,
+                    "Improvement method is missing"
+            );
+        }
+
+        if (success) {
+            method.recordSuccess();
+        } else {
+            method.recordFailure();
+        }
+
+        return new ImprovementLearningResult(
+                true,
+                method.getName(),
+                success,
+                method.getScore(),
+                success
+                        ? "Improvement method success recorded"
+                        : "Improvement method failure recorded"
+        );
+    }
+
+    public ImprovementMethod findBestMethod() {
+        return methodStore.findBest();
+    }
+
+    public ImprovementMethodStore getMethodStore() {
+        return methodStore;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementLabChangeApplier.java ====================
+
+package com.atlas.app.improvement;
+
+public interface ImprovementLabChangeApplier {
+
+    boolean apply(
+            ImprovementChangeProposal proposal,
+            ImprovementLabWorkspace workspace
+    );
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementSelfDevelopmentResult.java ====================
+
+package com.atlas.app.improvement;
+
+public class ImprovementSelfDevelopmentResult {
+
+    private final boolean success;
+    private final String stage;
+    private final String message;
+    private final ImprovementMethod method;
+    private final ImprovementChangeProposal proposal;
+    private final ImprovementLabWorkspace workspace;
+    private final ImprovementLabBuildResult buildResult;
+    private final ImprovementLabEvaluationResult evaluationResult;
+    private final ImprovementLabPromotionResult promotionResult;
+    private final ImprovementLearningResult learningResult;
+
+    public ImprovementSelfDevelopmentResult(
+            boolean success,
+            String stage,
+            String message,
+            ImprovementMethod method,
+            ImprovementChangeProposal proposal,
+            ImprovementLabWorkspace workspace,
+            ImprovementLabBuildResult buildResult,
+            ImprovementLabEvaluationResult evaluationResult,
+            ImprovementLabPromotionResult promotionResult,
+            ImprovementLearningResult learningResult
+    ) {
+        this.success = success;
+        this.stage = stage;
+        this.message = message;
+        this.method = method;
+        this.proposal = proposal;
+        this.workspace = workspace;
+        this.buildResult = buildResult;
+        this.evaluationResult = evaluationResult;
+        this.promotionResult = promotionResult;
+        this.learningResult = learningResult;
+    }
+
+    public boolean isSuccess() {
+        return success;
+    }
+
+    public String getStage() {
+        return stage;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public ImprovementMethod getMethod() {
+        return method;
+    }
+
+    public ImprovementChangeProposal getProposal() {
+        return proposal;
+    }
+
+    public ImprovementLabWorkspace getWorkspace() {
+        return workspace;
+    }
+
+    public ImprovementLabBuildResult getBuildResult() {
+        return buildResult;
+    }
+
+    public ImprovementLabEvaluationResult getEvaluationResult() {
+        return evaluationResult;
+    }
+
+    public ImprovementLabPromotionResult getPromotionResult() {
+        return promotionResult;
+    }
+
+    public ImprovementLearningResult getLearningResult() {
+        return learningResult;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementSelfDevelopmentLoop.java ====================
+
+package com.atlas.app.improvement;
+
+import com.atlas.app.ai.AIProviderRouter;
+
+import java.util.List;
+
+public class ImprovementSelfDevelopmentLoop {
+
+    private final ImprovementMethodRanker ranker;
+    private final ImprovementChangeProposalGenerator proposalGenerator;
+    private final ImprovementChangeSafety changeSafety;
+    private final ImprovementLabManager labManager;
+    private final ImprovementLabBuildExecutor buildExecutor;
+    private final ImprovementLabEvaluator evaluator;
+    private final ImprovementLabPromoter promoter;
+    private final ImprovementLearning learning;
+    private final ImprovementFixer fixer;
+
+    public ImprovementSelfDevelopmentLoop(
+            ImprovementMethodStore methodStore
+    ) {
+        this(
+                methodStore,
+                null,
+                null
+        );
+    }
+
+    public ImprovementSelfDevelopmentLoop(
+            ImprovementMethodStore methodStore,
+            AIProviderRouter aiProviderRouter
+    ) {
+        this(
+                methodStore,
+                aiProviderRouter,
+                null
+        );
+    }
+
+    public ImprovementSelfDevelopmentLoop(
+            ImprovementMethodStore methodStore,
+            AIProviderRouter aiProviderRouter,
+            ImprovementFixer fixer
+    ) {
+        this.ranker = new ImprovementMethodRanker();
+
+        this.proposalGenerator =
+                aiProviderRouter == null
+                        ? new ImprovementChangeProposalGenerator()
+                        : new ImprovementChangeProposalGenerator(
+                                aiProviderRouter
+                        );
+
+        this.changeSafety =
+                new ImprovementChangeSafety();
+        this.labManager =
+                new ImprovementLabManager();
+        this.buildExecutor =
+                new ImprovementLabBuildExecutor();
+        this.evaluator =
+                new ImprovementLabEvaluator();
+        this.promoter =
+                new ImprovementLabPromoter();
+        this.learning =
+                new ImprovementLearning(methodStore);
+        this.fixer =
+                fixer != null
+                        ? fixer
+                        : aiProviderRouter == null
+                                ? null
+                                : new AIImprovementFixer(
+                                        aiProviderRouter
+                                );
+    }
+
+    public ImprovementSelfDevelopmentResult execute(
+            ImprovementTask task,
+            ImprovementFinding finding,
+            List<String> affectedFiles,
+            String sourcePath,
+            String labRoot,
+            String targetPath,
+            ImprovementLabChangeApplier changeApplier
+    ) {
+        if (task == null) {
+            return failure(
+                    "INPUT",
+                    "Improvement task is missing"
+            );
+        }
+
+        if (finding == null) {
+            return failure(
+                    "ANALYSIS",
+                    "Improvement finding is missing"
+            );
+        }
+
+        if (changeApplier == null) {
+            return failure(
+                    "CHANGE",
+                    "LAB change applier is missing"
+            );
+        }
+
+        ImprovementChangeProposal proposal =
+                proposalGenerator.generate(
+                        task,
+                        finding,
+                        affectedFiles,
+                        sourcePath
+                );
+
+        ImprovementMethod method =
+                selectMethod();
+
+        ImprovementLabWorkspace lastWorkspace = null;
+        ImprovementLabBuildResult lastBuildResult = null;
+        ImprovementLabEvaluationResult lastEvaluationResult = null;
+
+        final int maxAttempts = 3;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+
+            if (proposal == null) {
+                ImprovementLearningResult learningResult =
+                        learning.record(method, false);
+
+                return new ImprovementSelfDevelopmentResult(
+                        false,
+                        "GENERATION",
+                        "Unable to generate improvement proposal",
+                        method,
+                        null,
+                        lastWorkspace,
+                        lastBuildResult,
+                        lastEvaluationResult,
+                        null,
+                        learningResult
+                );
+            }
+
+            ImprovementChangeSafetyReport safetyReport =
+                    changeSafety.evaluate(proposal);
+
+            if (!safetyReport.isAllowed()) {
+                ImprovementLearningResult learningResult =
+                        learning.record(method, false);
+
+                return new ImprovementSelfDevelopmentResult(
+                        false,
+                        "SAFETY",
+                        safetyReport.getReason(),
+                        method,
+                        proposal,
+                        lastWorkspace,
+                        lastBuildResult,
+                        lastEvaluationResult,
+                        null,
+                        learningResult
+                );
+            }
+
+            ImprovementLabWorkspace workspace =
+                    labManager.createWorkspace(
+                            proposal,
+                            sourcePath,
+                            labRoot
+                    );
+
+            if (workspace == null) {
+                ImprovementLearningResult learningResult =
+                        learning.record(method, false);
+
+                return new ImprovementSelfDevelopmentResult(
+                        false,
+                        "LAB",
+                        "Unable to create LAB workspace",
+                        method,
+                        proposal,
+                        null,
+                        lastBuildResult,
+                        lastEvaluationResult,
+                        null,
+                        learningResult
+                );
+            }
+
+            lastWorkspace = workspace;
+
+            if (!changeApplier.apply(
+                    proposal,
+                    workspace
+            )) {
+                workspace.markFailed();
+
+                labManager.archiveFailedWorkspace(
+                        workspace,
+                        labRoot
+                );
+
+                ImprovementLearningResult learningResult =
+                        learning.record(method, false);
+
+                return new ImprovementSelfDevelopmentResult(
+                        false,
+                        "CHANGE",
+                        "LAB change application failed",
+                        method,
+                        proposal,
+                        workspace,
+                        null,
+                        null,
+                        null,
+                        learningResult
+                );
+            }
+
+            workspace.markChanged();
+
+            ImprovementLabBuildResult buildResult =
+                    buildExecutor.buildAndTest(workspace);
+
+            ImprovementLabEvaluationResult evaluationResult =
+                    evaluator.evaluate(
+                            workspace,
+                            buildResult
+                    );
+
+            lastBuildResult = buildResult;
+            lastEvaluationResult = evaluationResult;
+
+            if (evaluationResult.isPassed()) {
+
+                ImprovementLabPromotionResult promotionResult =
+                        promoter.promote(
+                                workspace,
+                                targetPath
+                        );
+
+                if (!promotionResult.isSuccess()) {
+                    ImprovementLearningResult learningResult =
+                            learning.record(method, false);
+
+                    return new ImprovementSelfDevelopmentResult(
+                            false,
+                            "PROMOTION",
+                            promotionResult.getReason(),
+                            method,
+                            proposal,
+                            workspace,
+                            buildResult,
+                            evaluationResult,
+                            promotionResult,
+                            learningResult
+                    );
+                }
+
+                ImprovementLearningResult learningResult =
+                        learning.record(method, true);
+
+                return new ImprovementSelfDevelopmentResult(
+                        true,
+                        "COMPLETED",
+                        "Self-development loop completed successfully "
+                                + "on attempt " + attempt,
+                        method,
+                        proposal,
+                        workspace,
+                        buildResult,
+                        evaluationResult,
+                        promotionResult,
+                        learningResult
+                );
+            }
+
+            workspace.markFailed();
+
+            labManager.archiveFailedWorkspace(
+                    workspace,
+                    labRoot
+            );
+
+            if (attempt < maxAttempts
+                    && fixer != null) {
+
+                proposal =
+                        fixer.fix(
+                                task,
+                                finding,
+                                proposal,
+                                buildResult,
+                                evaluationResult
+                        );
+
+                continue;
+            }
+
+            ImprovementLearningResult learningResult =
+                    learning.record(method, false);
+
+            return new ImprovementSelfDevelopmentResult(
+                    false,
+                    "EVALUATION",
+                    "Self-development failed after "
+                            + attempt
+                            + " attempt(s): "
+                            + evaluationResult.getReason(),
+                    method,
+                    proposal,
+                    workspace,
+                    buildResult,
+                    evaluationResult,
+                    null,
+                    learningResult
+            );
+        }
+
+        ImprovementLearningResult learningResult =
+                learning.record(method, false);
+
+        return new ImprovementSelfDevelopmentResult(
+                false,
+                "RETRY",
+                "Self-development retry loop ended unexpectedly",
+                method,
+                proposal,
+                lastWorkspace,
+                lastBuildResult,
+                lastEvaluationResult,
+                null,
+                learningResult
+        );
+    }
+
+    private ImprovementMethod selectMethod() {
+        List<ImprovementMethod> methods =
+                learningMethods();
+
+        return ranker.best(methods);
+    }
+
+    private List<ImprovementMethod> learningMethods() {
+        return learningStore().getAll();
+    }
+
+    private ImprovementMethodStore learningStore() {
+        return learning.getMethodStore();
+    }
+
+    private ImprovementSelfDevelopmentResult failure(
+            String stage,
+            String message
+    ) {
+        return new ImprovementSelfDevelopmentResult(
+                false,
+                stage,
+                message,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementRealLabChangeApplier.java ====================
+
+package com.atlas.app.improvement;
+
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.Map;
+
+public class ImprovementRealLabChangeApplier
+        implements ImprovementLabChangeApplier {
+
+    @Override
+    public boolean apply(
+            ImprovementChangeProposal proposal,
+            ImprovementLabWorkspace workspace
+    ) {
+        if (proposal == null || workspace == null) {
+            return false;
+        }
+
+        Map<String, String> changes =
+                proposal.getProposedFileContents();
+
+        if (changes == null || changes.isEmpty()) {
+            return false;
+        }
+
+        try {
+            File root =
+                    new File(
+                            workspace.getWorkspacePath()
+                    );
+
+            for (Map.Entry<String, String> entry
+                    : changes.entrySet()) {
+
+                String relativePath = entry.getKey();
+                String content = entry.getValue();
+
+                if (relativePath == null
+                        || relativePath.trim().isEmpty()
+                        || content == null) {
+                    return false;
+                }
+
+                File target =
+                        new File(
+                                root,
+                                relativePath
+                        );
+
+                String rootPath =
+                        root.getCanonicalPath();
+
+                String targetPath =
+                        target.getCanonicalPath();
+
+                if (!targetPath.equals(rootPath)
+                        && !targetPath.startsWith(
+                                rootPath + File.separator
+                        )) {
+                    return false;
+                }
+
+                File parent =
+                        target.getParentFile();
+
+                if (parent != null
+                        && !parent.exists()
+                        && !parent.mkdirs()) {
+                    return false;
+                }
+
+                Files.write(
+                        target.toPath(),
+                        content.getBytes(
+                                StandardCharsets.UTF_8
+                        )
+                );
+            }
+
+            return true;
+
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/ImprovementFixer.java ====================
+
+package com.atlas.app.improvement;
+
+public interface ImprovementFixer {
+
+    ImprovementChangeProposal fix(
+            ImprovementTask task,
+            ImprovementFinding finding,
+            ImprovementChangeProposal failedProposal,
+            ImprovementLabBuildResult buildResult,
+            ImprovementLabEvaluationResult evaluationResult
+    );
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/improvement/AIImprovementFixer.java ====================
+
+package com.atlas.app.improvement;
+
+import com.atlas.app.ai.AIProviderRouter;
+
+import java.util.Collections;
+
+public class AIImprovementFixer implements ImprovementFixer {
+
+    private final ImprovementChangeProposalGenerator generator;
+
+    public AIImprovementFixer(
+            AIProviderRouter router
+    ) {
+        this.generator =
+                new ImprovementChangeProposalGenerator(router);
+    }
+
+    @Override
+    public ImprovementChangeProposal fix(
+            ImprovementTask task,
+            ImprovementFinding finding,
+            ImprovementChangeProposal failedProposal,
+            ImprovementLabBuildResult buildResult,
+            ImprovementLabEvaluationResult evaluationResult
+    ) {
+        if (task == null || finding == null || buildResult == null) {
+            return null;
+        }
+
+        StringBuilder failureContext =
+                new StringBuilder();
+
+        failureContext
+                .append("The previous generated change failed validation.\n\n")
+                .append("Build success: ")
+                .append(buildResult.isBuildSuccess())
+                .append('\n')
+                .append("Test success: ")
+                .append(buildResult.isTestSuccess())
+                .append('\n')
+                .append("Build exit code: ")
+                .append(buildResult.getBuildExitCode())
+                .append('\n')
+                .append("Test exit code: ")
+                .append(buildResult.getTestExitCode())
+                .append("\n\n");
+
+        if (buildResult.getBuildOutput() != null) {
+            failureContext
+                    .append("Build output:\n")
+                    .append(buildResult.getBuildOutput())
+                    .append("\n\n");
+        }
+
+        if (buildResult.getTestOutput() != null) {
+            failureContext
+                    .append("Test output:\n")
+                    .append(buildResult.getTestOutput())
+                    .append("\n\n");
+        }
+
+        if (evaluationResult != null) {
+            failureContext
+                    .append("Evaluation:\n")
+                    .append(evaluationResult.getReason())
+                    .append('\n');
+        }
+
+        String problem =
+                finding.getProblem()
+                        + "\n\n"
+                        + failureContext;
+
+        String recommendation =
+                "Fix the previous generated change so that the project "
+                        + "builds and all tests pass. "
+                        + "Preserve the original task and change only what "
+                        + "is necessary to correct the failure.";
+
+        ImprovementFinding fixFinding =
+                new ImprovementFinding(
+                        finding.getArea(),
+                        problem,
+                        recommendation
+                );
+
+        return generator.generate(
+                task,
+                fixFinding,
+                failedProposal == null
+                        ? Collections.emptyList()
+                        : failedProposal.getAffectedFiles(),
+                null
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/AIProviderType.java ====================
+
+package com.atlas.app.ai;
+
+public enum AIProviderType {
+    CLOUD,
+    LOCAL,
+    HYBRID
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/AIProvider.java ====================
+
+package com.atlas.app.ai;
+
+public interface AIProvider {
+
+    String getName();
+
+    AIProviderType getType();
+
+    boolean isAvailable();
+
+    AIResponse generate(
+            AIRequest request
+    );
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/AIProviderRegistry.java ====================
+
+package com.atlas.app.ai;
+
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public class AIProviderRegistry {
+
+    private final Map<String, AIProvider> providers =
+            new LinkedHashMap<>();
+
+    public void register(AIProvider provider) {
+        if (provider == null) {
+            return;
+        }
+
+        String name = provider.getName();
+
+        if (name == null || name.trim().isEmpty()) {
+            return;
+        }
+
+        providers.put(
+                name.trim().toLowerCase(),
+                provider
+        );
+    }
+
+    public AIProvider get(String name) {
+        if (name == null) {
+            return null;
+        }
+
+        return providers.get(
+                name.trim().toLowerCase()
+        );
+    }
+
+    public AIProvider getAvailable(
+            AIProviderType type
+    ) {
+        for (AIProvider provider : providers.values()) {
+            if (!provider.isAvailable()) {
+                continue;
+            }
+
+            if (type == null
+                    || provider.getType() == type) {
+                return provider;
+            }
+        }
+
+        return null;
+    }
+
+    public Collection<AIProvider> getAll() {
+        return providers.values();
+    }
+
+    public boolean contains(String name) {
+        return get(name) != null;
+    }
+
+    public int size() {
+        return providers.size();
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/UnavailableAIProvider.java ====================
+
+package com.atlas.app.ai;
+
+public class UnavailableAIProvider
+        implements AIProvider {
+
+    private final String name;
+    private final AIProviderType type;
+
+    public UnavailableAIProvider(
+            String name,
+            AIProviderType type
+    ) {
+        this.name = name;
+        this.type = type;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public AIProviderType getType() {
+        return type;
+    }
+
+    @Override
+    public boolean isAvailable() {
+        return false;
+    }
+
+    @Override
+    public AIResponse generate(
+            AIRequest request
+    ) {
+        return AIResponse.failure(
+                "AI provider is not available: "
+                        + name,
+                -1
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/AIProviderManager.java ====================
+
+package com.atlas.app.ai;
+
+public class AIProviderManager {
+
+    private final AIProviderRegistry registry;
+    private AIProviderType preferredType;
+
+    public AIProviderManager() {
+        this(new AIProviderRegistry());
+    }
+
+    public AIProviderManager(
+            AIProviderRegistry registry
+    ) {
+        this.registry =
+                registry == null
+                        ? new AIProviderRegistry()
+                        : registry;
+    }
+
+    public void setPreferredType(
+            AIProviderType type
+    ) {
+        this.preferredType = type;
+    }
+
+    public AIProviderType getPreferredType() {
+        return preferredType;
+    }
+
+    public AIProvider getProvider() {
+        AIProvider provider =
+                registry.getAvailable(
+                        preferredType
+                );
+
+        if (provider != null) {
+            return provider;
+        }
+
+        return registry.getAvailable(null);
+    }
+
+    public AIProvider getProvider(
+            AIProviderType type
+    ) {
+        return registry.getAvailable(type);
+    }
+
+    public AIProviderRegistry getRegistry() {
+        return registry;
+    }
+
+    public void register(
+            AIProvider provider
+    ) {
+        registry.register(provider);
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/CloudAIProvider.java ====================
+
+package com.atlas.app.ai;
+
+public abstract class CloudAIProvider
+        implements AIProvider {
+
+    @Override
+    public final AIProviderType getType() {
+        return AIProviderType.CLOUD;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/LocalAIProvider.java ====================
+
+package com.atlas.app.ai;
+
+public abstract class LocalAIProvider
+        implements AIProvider {
+
+    @Override
+    public final AIProviderType getType() {
+        return AIProviderType.LOCAL;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/HybridAIProvider.java ====================
+
+package com.atlas.app.ai;
+
+public abstract class HybridAIProvider
+        implements AIProvider {
+
+    @Override
+    public final AIProviderType getType() {
+        return AIProviderType.HYBRID;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/ProviderSelection.java ====================
+
+package com.atlas.app.ai;
+
+public class ProviderSelection {
+
+    private final boolean success;
+    private final AIProvider provider;
+    private final String reason;
+
+    private ProviderSelection(
+            boolean success,
+            AIProvider provider,
+            String reason
+    ) {
+        this.success = success;
+        this.provider = provider;
+        this.reason = reason;
+    }
+
+    public static ProviderSelection selected(
+            AIProvider provider
+    ) {
+        return new ProviderSelection(
+                true,
+                provider,
+                ""
+        );
+    }
+
+    public static ProviderSelection unavailable(
+            String reason
+    ) {
+        return new ProviderSelection(
+                false,
+                null,
+                reason
+        );
+    }
+
+    public boolean isSuccess() {
+        return success;
+    }
+
+    public AIProvider getProvider() {
+        return provider;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/AIProviderSelector.java ====================
+
+package com.atlas.app.ai;
+
+public class AIProviderSelector {
+
+    private final AIProviderManager manager;
+
+    public AIProviderSelector(
+            AIProviderManager manager
+    ) {
+        this.manager = manager;
+    }
+
+    public ProviderSelection select() {
+        if (manager == null) {
+            return ProviderSelection.unavailable(
+                    "AI provider manager is missing"
+            );
+        }
+
+        AIProvider provider =
+                manager.getProvider();
+
+        if (provider == null) {
+            return ProviderSelection.unavailable(
+                    "No available AI provider"
+            );
+        }
+
+        return ProviderSelection.selected(
+                provider
+        );
+    }
+
+    public ProviderSelection select(
+            AIProviderType type
+    ) {
+        if (manager == null) {
+            return ProviderSelection.unavailable(
+                    "AI provider manager is missing"
+            );
+        }
+
+        AIProvider provider =
+                manager.getProvider(type);
+
+        if (provider == null) {
+            return ProviderSelection.unavailable(
+                    "No available "
+                            + type
+                            + " AI provider"
+            );
+        }
+
+        return ProviderSelection.selected(
+                provider
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/AIProviderConfig.java ====================
+
+package com.atlas.app.ai;
+
+public class AIProviderConfig {
+
+    private final String endpoint;
+    private final String model;
+    private final String apiKey;
+
+    public AIProviderConfig(
+            String endpoint,
+            String model,
+            String apiKey
+    ) {
+        this.endpoint = endpoint == null ? "" : endpoint;
+        this.model = model == null ? "" : model;
+        this.apiKey = apiKey == null ? "" : apiKey;
+    }
+
+    public String getEndpoint() {
+        return endpoint;
+    }
+
+    public String getModel() {
+        return model;
+    }
+
+    public String getApiKey() {
+        return apiKey;
+    }
+
+    public boolean isConfigured() {
+        return !endpoint.trim().isEmpty()
+                && !model.trim().isEmpty();
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/CloudAIProviderBase.java ====================
+
+package com.atlas.app.ai;
+
+public abstract class CloudAIProviderBase
+        extends CloudAIProvider {
+
+    protected final AIProviderConfig config;
+
+    protected final AIProviderConfig getConfig() {
+        return config;
+    }
+
+
+    protected CloudAIProviderBase(
+            AIProviderConfig config
+    ) {
+        this.config = config;
+    }
+
+    @Override
+    public boolean isAvailable() {
+        return config != null
+                && config.isConfigured();
+    }
+
+    protected AIResponse unavailable() {
+        return AIResponse.failure(
+                "Cloud AI provider is not configured: "
+                        + getName(),
+                -20
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/LocalAIProviderBase.java ====================
+
+package com.atlas.app.ai;
+
+public abstract class LocalAIProviderBase
+        extends LocalAIProvider {
+
+    protected final AIProviderConfig config;
+
+    protected LocalAIProviderBase(
+            AIProviderConfig config
+    ) {
+        this.config = config;
+    }
+
+    protected final AIProviderConfig getConfig() {
+        return config;
+    }
+
+    @Override
+    public boolean isAvailable() {
+        return config != null
+                && config.isConfigured();
+    }
+
+    protected AIResponse unavailable() {
+        return AIResponse.failure(
+                "Local AI provider is not configured: "
+                        + getName(),
+                -21
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/HybridAIProviderBase.java ====================
+
+package com.atlas.app.ai;
+
+public abstract class HybridAIProviderBase
+        extends HybridAIProvider {
+
+    protected final AIProvider cloudProvider;
+    protected final AIProvider localProvider;
+
+    protected HybridAIProviderBase(
+            AIProvider cloudProvider,
+            AIProvider localProvider
+    ) {
+        this.cloudProvider = cloudProvider;
+        this.localProvider = localProvider;
+    }
+
+    @Override
+    public boolean isAvailable() {
+        return isAvailable(cloudProvider)
+                || isAvailable(localProvider);
+    }
+
+    protected AIProvider selectProvider() {
+        if (isAvailable(cloudProvider)) {
+            return cloudProvider;
+        }
+
+        if (isAvailable(localProvider)) {
+            return localProvider;
+        }
+
+        return null;
+    }
+
+    private boolean isAvailable(
+            AIProvider provider
+    ) {
+        return provider != null
+                && provider.isAvailable();
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/GenericCloudAIProvider.java ====================
+
+package com.atlas.app.ai;
+
+public class GenericCloudAIProvider
+        extends CloudAIProviderBase {
+
+    private final String name;
+
+    public GenericCloudAIProvider(
+            String name,
+            AIProviderConfig config
+    ) {
+        super(config);
+        this.name =
+                name == null
+                        ? "cloud"
+                        : name;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public AIResponse generate(
+            AIRequest request
+    ) {
+        return unavailable();
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/GenericLocalAIProvider.java ====================
+
+package com.atlas.app.ai;
+
+public class GenericLocalAIProvider
+        extends LocalAIProviderBase {
+
+    private final String name;
+
+    public GenericLocalAIProvider(
+            String name,
+            AIProviderConfig config
+    ) {
+        super(config);
+        this.name =
+                name == null
+                        ? "local"
+                        : name;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public AIResponse generate(
+            AIRequest request
+    ) {
+        return unavailable();
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/GenericHybridAIProvider.java ====================
+
+package com.atlas.app.ai;
+
+public class GenericHybridAIProvider
+        extends HybridAIProviderBase {
+
+    private final String name;
+
+    public GenericHybridAIProvider(
+            String name,
+            AIProvider cloudProvider,
+            AIProvider localProvider
+    ) {
+        super(
+                cloudProvider,
+                localProvider
+        );
+
+        this.name =
+                name == null
+                        ? "hybrid"
+                        : name;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public AIResponse generate(
+            AIRequest request
+    ) {
+        AIProvider provider =
+                selectProvider();
+
+        if (provider == null) {
+            return AIResponse.failure(
+                    "No available cloud or local provider",
+                    -22
+            );
+        }
+
+        return provider.generate(request);
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/AIProviderTransport.java ====================
+
+package com.atlas.app.ai;
+
+public interface AIProviderTransport {
+
+    AITransportResponse execute(AITransportRequest request);
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/HttpAIProviderTransport.java ====================
+
+package com.atlas.app.ai;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+
+public final class HttpAIProviderTransport implements AIProviderTransport {
+
+    private final int connectTimeoutMs;
+    private final int readTimeoutMs;
+
+    public HttpAIProviderTransport() {
+        this(15000, 60000);
+    }
+
+    public HttpAIProviderTransport(
+            int connectTimeoutMs,
+            int readTimeoutMs
+    ) {
+        this.connectTimeoutMs = connectTimeoutMs;
+        this.readTimeoutMs = readTimeoutMs;
+    }
+
+    @Override
+    public AITransportResponse execute(AITransportRequest request) {
+        if (request == null || request.getEndpoint() == null
+                || request.getEndpoint().trim().isEmpty()) {
+            return AITransportResponse.failure(
+                    -1,
+                    "",
+                    "Transport endpoint is empty"
+            );
+        }
+
+        HttpURLConnection connection = null;
+
+        try {
+            URL url = new URL(request.getEndpoint());
+            connection = (HttpURLConnection) url.openConnection();
+
+            connection.setRequestMethod(request.getMethod());
+            connection.setConnectTimeout(connectTimeoutMs);
+            connection.setReadTimeout(readTimeoutMs);
+            connection.setDoInput(true);
+
+            for (Map.Entry<String, String> header
+                    : request.getHeaders().entrySet()) {
+                connection.setRequestProperty(
+                        header.getKey(),
+                        header.getValue()
+                );
+            }
+
+            String body = request.getBody();
+
+            if (body != null && !body.isEmpty()) {
+                connection.setDoOutput(true);
+
+                byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+
+                try (OutputStream output = connection.getOutputStream()) {
+                    output.write(bytes);
+                }
+            }
+
+            int statusCode = connection.getResponseCode();
+
+            InputStream stream = statusCode >= 400
+                    ? connection.getErrorStream()
+                    : connection.getInputStream();
+
+            String responseBody = read(stream);
+
+            if (statusCode >= 200 && statusCode < 300) {
+                return AITransportResponse.success(
+                        statusCode,
+                        responseBody
+                );
+            }
+
+            return AITransportResponse.failure(
+                    statusCode,
+                    responseBody,
+                    "HTTP " + statusCode
+            );
+
+        } catch (Exception e) {
+            return AITransportResponse.failure(
+                    -1,
+                    "",
+                    e.getClass().getSimpleName() + ": " + e.getMessage()
+            );
+
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    private String read(InputStream stream) throws Exception {
+        if (stream == null) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder();
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(
+                        stream,
+                        StandardCharsets.UTF_8
+                ))) {
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                result.append(line).append('\n');
+            }
+        }
+
+        return result.toString().trim();
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/OpenAIProvider.java ====================
+
+package com.atlas.app.ai;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public final class OpenAIProvider extends CloudAIProviderBase {
+
+    public static final String DEFAULT_ENDPOINT =
+            "https://api.openai.com/v1/responses";
+
+    private final AIProviderTransport transport;
+
+    public OpenAIProvider(
+            AIProviderConfig config,
+            AIProviderTransport transport
+    ) {
+        super(config);
+        this.transport = transport;
+    }
+
+    @Override
+    public String getName() {
+        return "openai";
+    }
+
+    @Override
+    public AIResponse generate(AIRequest request) {
+        if (!isAvailable()) {
+            return unavailable();
+        }
+
+        if (request == null) {
+            return AIResponse.failure(
+                    "OpenAI request is null",
+                    -30
+            );
+        }
+
+        if (transport == null) {
+            return AIResponse.failure(
+                    "OpenAI transport is unavailable",
+                    -31
+            );
+        }
+
+        try {
+            String systemPrompt = request.getSystemPrompt();
+            String userPrompt = request.getUserPrompt();
+
+            JSONObject body = new JSONObject();
+
+            body.put("model", getConfig().getModel());
+
+            JSONArray input = new JSONArray();
+
+            if (systemPrompt != null && !systemPrompt.trim().isEmpty()) {
+                JSONObject system = new JSONObject();
+                system.put("role", "developer");
+                system.put("content", systemPrompt);
+                input.put(system);
+            }
+
+            JSONObject user = new JSONObject();
+            user.put("role", "user");
+            user.put("content", userPrompt == null ? "" : userPrompt);
+            input.put(user);
+
+            body.put("input", input);
+
+            Map<String, String> headers = new LinkedHashMap<>();
+            headers.put(
+                    "Authorization",
+                    "Bearer " + getConfig().getApiKey()
+            );
+            headers.put(
+                    "Content-Type",
+                    "application/json"
+            );
+
+            AITransportRequest transportRequest =
+                    new AITransportRequest(
+                            getEndpoint(),
+                            "POST",
+                            headers,
+                            body.toString()
+                    );
+
+            AITransportResponse response =
+                    transport.execute(transportRequest);
+
+            if (!response.isSuccess()) {
+                return AIResponse.failure(
+                        "OpenAI HTTP error: "
+                                + response.getStatusCode()
+                                + " "
+                                + response.getError(),
+                        response.getStatusCode()
+                );
+            }
+
+            String output = extractOutputText(response.getBody());
+
+            if (output == null || output.trim().isEmpty()) {
+                return AIResponse.failure(
+                        "OpenAI returned no text output",
+                        -32
+                );
+            }
+
+            return AIResponse.success(output);
+
+        } catch (Exception e) {
+            return AIResponse.failure(
+                    "OpenAI response parsing failed: "
+                            + e.getMessage(),
+                    -33
+            );
+        }
+    }
+
+    private String getEndpoint() {
+        String endpoint = getConfig().getEndpoint();
+
+        if (endpoint == null || endpoint.trim().isEmpty()) {
+            return DEFAULT_ENDPOINT;
+        }
+
+        return endpoint;
+    }
+
+    private String extractOutputText(String raw) {
+        try {
+
+        JSONObject root = new JSONObject(raw);
+
+        if (root.has("output_text")) {
+            return root.optString("output_text", "");
+        }
+
+        JSONArray output = root.optJSONArray("output");
+
+        if (output == null) {
+            return "";
+        }
+
+        StringBuilder text = new StringBuilder();
+
+        for (int i = 0; i < output.length(); i++) {
+            JSONObject item = output.optJSONObject(i);
+
+            if (item == null) {
+                continue;
+            }
+
+            JSONArray content = item.optJSONArray("content");
+
+            if (content == null) {
+                continue;
+            }
+
+            for (int j = 0; j < content.length(); j++) {
+                JSONObject contentItem = content.optJSONObject(j);
+
+                if (contentItem == null) {
+                    continue;
+                }
+
+                if ("output_text".equals(
+                        contentItem.optString("type")
+                )) {
+                    String value =
+                            contentItem.optString("text", "");
+
+                    if (!value.isEmpty()) {
+                        if (text.length() > 0) {
+                            text.append('\n');
+                        }
+
+                        text.append(value);
+                    }
+                }
+            }
+        }
+
+        return text.toString();
+    
+        } catch (Exception e) {
+            return "";
+        }
+    
+}
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/GeminiProvider.java ====================
+
+package com.atlas.app.ai;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public final class GeminiProvider extends CloudAIProviderBase {
+
+    public static final String DEFAULT_ENDPOINT =
+            "https://generativelanguage.googleapis.com/v1beta/models";
+
+    private final AIProviderTransport transport;
+
+    public GeminiProvider(
+            AIProviderConfig config,
+            AIProviderTransport transport
+    ) {
+        super(config);
+        this.transport = transport;
+    }
+
+    @Override
+    public String getName() {
+        return "gemini";
+    }
+
+    @Override
+    public AIResponse generate(AIRequest request) {
+        if (!isAvailable()) {
+            return unavailable();
+        }
+
+        if (request == null) {
+            return AIResponse.failure(
+                    "Gemini request is null",
+                    -40
+            );
+        }
+
+        if (transport == null) {
+            return AIResponse.failure(
+                    "Gemini transport is unavailable",
+                    -41
+            );
+        }
+
+        try {
+            JSONObject body = new JSONObject();
+
+            JSONArray contents = new JSONArray();
+            JSONObject userContent = new JSONObject();
+            userContent.put("role", "user");
+
+            JSONArray parts = new JSONArray();
+
+            String systemPrompt = request.getSystemPrompt();
+            String userPrompt = request.getUserPrompt();
+
+            if (systemPrompt != null && !systemPrompt.trim().isEmpty()) {
+                JSONObject systemPart = new JSONObject();
+                systemPart.put(
+                        "text",
+                        systemPrompt
+                );
+                parts.put(systemPart);
+            }
+
+            JSONObject userPart = new JSONObject();
+            userPart.put(
+                    "text",
+                    userPrompt == null ? "" : userPrompt
+            );
+            parts.put(userPart);
+
+            userContent.put("parts", parts);
+            contents.put(userContent);
+            body.put("contents", contents);
+
+            String endpoint = getEndpoint();
+
+            Map<String, String> headers =
+                new LinkedHashMap<>();
+
+        headers.put(
+                "Content-Type",
+                "application/json"
+        );
+
+        String apiKey = getConfig().getApiKey();
+
+        if (apiKey != null && !apiKey.trim().isEmpty()) {
+            headers.put(
+                    "x-goog-api-key",
+                    apiKey
+            );
+        }
+
+        AITransportRequest transportRequest =
+                    new AITransportRequest(
+                            endpoint,
+                            "POST",
+                            headers,
+                            body.toString()
+                    );
+
+            AITransportResponse response =
+                    transport.execute(transportRequest);
+
+            if (!response.isSuccess()) {
+                return AIResponse.failure(
+                        "Gemini HTTP error: "
+                                + response.getStatusCode()
+                                + " "
+                                + response.getError(),
+                        response.getStatusCode()
+                );
+            }
+
+            String output =
+                    extractOutputText(response.getBody());
+
+            if (output == null || output.trim().isEmpty()) {
+                return AIResponse.failure(
+                        "Gemini returned no text output",
+                        -42
+                );
+            }
+
+            return AIResponse.success(output);
+
+        } catch (Exception e) {
+            return AIResponse.failure(
+                    "Gemini response parsing failed: "
+                            + e.getMessage(),
+                    -43
+            );
+        }
+    }
+
+    private String getEndpoint() {
+        String endpoint =
+                getConfig().getEndpoint();
+
+        String model =
+                getConfig().getModel();
+
+        if (endpoint == null
+                || endpoint.trim().isEmpty()) {
+            return DEFAULT_ENDPOINT
+                    + "/"
+                    + model
+                    + ":generateContent";
+        }
+
+        if (endpoint.equals(DEFAULT_ENDPOINT)
+                || endpoint.endsWith("/models")) {
+            return endpoint
+                    + "/"
+                    + model
+                    + ":generateContent";
+        }
+
+        return endpoint;
+    }
+
+    private String extractOutputText(String raw) {
+        try {
+            JSONObject root =
+                    new JSONObject(raw);
+
+            JSONArray candidates =
+                    root.optJSONArray("candidates");
+
+            if (candidates == null) {
+                return "";
+            }
+
+            StringBuilder text =
+                    new StringBuilder();
+
+            for (int i = 0;
+                    i < candidates.length();
+                    i++) {
+
+                JSONObject candidate =
+                        candidates.optJSONObject(i);
+
+                if (candidate == null) {
+                    continue;
+                }
+
+                JSONObject content =
+                        candidate.optJSONObject("content");
+
+                if (content == null) {
+                    continue;
+                }
+
+                JSONArray parts =
+                        content.optJSONArray("parts");
+
+                if (parts == null) {
+                    continue;
+                }
+
+                for (int j = 0;
+                        j < parts.length();
+                        j++) {
+
+                    JSONObject part =
+                            parts.optJSONObject(j);
+
+                    if (part == null) {
+                        continue;
+                    }
+
+                    String value =
+                            part.optString(
+                                    "text",
+                                    ""
+                            );
+
+                    if (!value.isEmpty()) {
+                        if (text.length() > 0) {
+                            text.append('\n');
+                        }
+
+                        text.append(value);
+                    }
+                }
+            }
+
+            return text.toString();
+
+        } catch (Exception e) {
+            return "";
+        }
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/ClaudeProvider.java ====================
+
+package com.atlas.app.ai;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public final class ClaudeProvider extends CloudAIProviderBase {
+
+    public static final String DEFAULT_ENDPOINT =
+            "https://api.anthropic.com/v1/messages";
+
+    private final AIProviderTransport transport;
+
+    public ClaudeProvider(
+            AIProviderConfig config,
+            AIProviderTransport transport
+    ) {
+        super(config);
+        this.transport = transport;
+    }
+
+    @Override
+    public String getName() {
+        return "claude";
+    }
+
+    @Override
+    public AIResponse generate(AIRequest request) {
+        if (!isAvailable()) {
+            return unavailable();
+        }
+
+        if (request == null) {
+            return AIResponse.failure(
+                    "Claude request is null",
+                    -50
+            );
+        }
+
+        if (transport == null) {
+            return AIResponse.failure(
+                    "Claude transport is unavailable",
+                    -51
+            );
+        }
+
+        try {
+            JSONObject body = new JSONObject();
+
+            body.put("model", getConfig().getModel());
+            body.put("max_tokens", 4096);
+
+            String systemPrompt = request.getSystemPrompt();
+            String userPrompt = request.getUserPrompt();
+
+            if (systemPrompt != null
+                    && !systemPrompt.trim().isEmpty()) {
+                body.put("system", systemPrompt);
+            }
+
+            JSONArray messages = new JSONArray();
+
+            JSONObject userMessage = new JSONObject();
+            userMessage.put("role", "user");
+
+            JSONArray content = new JSONArray();
+            JSONObject text = new JSONObject();
+            text.put("type", "text");
+            text.put(
+                    "text",
+                    userPrompt == null ? "" : userPrompt
+            );
+
+            content.put(text);
+            userMessage.put("content", content);
+            messages.put(userMessage);
+
+            body.put("messages", messages);
+
+            Map<String, String> headers =
+                    new LinkedHashMap<>();
+
+            headers.put(
+                    "x-api-key",
+                    getConfig().getApiKey()
+            );
+            headers.put(
+                    "anthropic-version",
+                    "2023-06-01"
+            );
+            headers.put(
+                    "Content-Type",
+                    "application/json"
+            );
+
+            AITransportRequest transportRequest =
+                    new AITransportRequest(
+                            getEndpoint(),
+                            "POST",
+                            headers,
+                            body.toString()
+                    );
+
+            AITransportResponse response =
+                    transport.execute(transportRequest);
+
+            if (!response.isSuccess()) {
+                return AIResponse.failure(
+                        "Claude HTTP error: "
+                                + response.getStatusCode()
+                                + " "
+                                + response.getError(),
+                        response.getStatusCode()
+                );
+            }
+
+            String output =
+                    extractOutputText(response.getBody());
+
+            if (output == null
+                    || output.trim().isEmpty()) {
+                return AIResponse.failure(
+                        "Claude returned no text output",
+                        -52
+                );
+            }
+
+            return AIResponse.success(output);
+
+        } catch (Exception e) {
+            return AIResponse.failure(
+                    "Claude response parsing failed: "
+                            + e.getMessage(),
+                    -53
+            );
+        }
+    }
+
+    private String getEndpoint() {
+        String endpoint =
+                getConfig().getEndpoint();
+
+        if (endpoint == null
+                || endpoint.trim().isEmpty()) {
+            return DEFAULT_ENDPOINT;
+        }
+
+        return endpoint;
+    }
+
+    private String extractOutputText(String raw) {
+        try {
+            JSONObject root =
+                    new JSONObject(raw);
+
+            JSONArray content =
+                    root.optJSONArray("content");
+
+            if (content == null) {
+                return "";
+            }
+
+            StringBuilder text =
+                    new StringBuilder();
+
+            for (int i = 0;
+                    i < content.length();
+                    i++) {
+
+                JSONObject item =
+                        content.optJSONObject(i);
+
+                if (item == null) {
+                    continue;
+                }
+
+                if (!"text".equals(
+                        item.optString("type"))) {
+                    continue;
+                }
+
+                String value =
+                        item.optString("text", "");
+
+                if (!value.isEmpty()) {
+                    if (text.length() > 0) {
+                        text.append('\n');
+                    }
+
+                    text.append(value);
+                }
+            }
+
+            return text.toString();
+
+        } catch (Exception e) {
+            return "";
+        }
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/OllamaProvider.java ====================
+
+package com.atlas.app.ai;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public final class OllamaProvider extends LocalAIProviderBase {
+
+    public static final String DEFAULT_ENDPOINT =
+            "http://127.0.0.1:11434/api/chat";
+
+    private final AIProviderTransport transport;
+
+    public OllamaProvider(
+            AIProviderConfig config,
+            AIProviderTransport transport
+    ) {
+        super(config);
+        this.transport = transport;
+    }
+
+    @Override
+    public String getName() {
+        return "ollama";
+    }
+
+    @Override
+    public AIResponse generate(AIRequest request) {
+        if (!isAvailable()) {
+            return unavailable();
+        }
+
+        if (request == null) {
+            return AIResponse.failure(
+                    "Ollama request is null",
+                    -60
+            );
+        }
+
+        if (transport == null) {
+            return AIResponse.failure(
+                    "Ollama transport is unavailable",
+                    -61
+            );
+        }
+
+        try {
+            JSONObject body = new JSONObject();
+
+            body.put("model", getConfig().getModel());
+            body.put("stream", false);
+
+            JSONArray messages = new JSONArray();
+
+            String systemPrompt = request.getSystemPrompt();
+            String userPrompt = request.getUserPrompt();
+
+            if (systemPrompt != null
+                    && !systemPrompt.trim().isEmpty()) {
+
+                JSONObject system = new JSONObject();
+                system.put("role", "system");
+                system.put("content", systemPrompt);
+                messages.put(system);
+            }
+
+            JSONObject user = new JSONObject();
+            user.put("role", "user");
+            user.put(
+                    "content",
+                    userPrompt == null ? "" : userPrompt
+            );
+            messages.put(user);
+
+            body.put("messages", messages);
+
+            Map<String, String> headers =
+                    new LinkedHashMap<>();
+
+            headers.put(
+                    "Content-Type",
+                    "application/json"
+            );
+
+            AITransportRequest transportRequest =
+                    new AITransportRequest(
+                            getEndpoint(),
+                            "POST",
+                            headers,
+                            body.toString()
+                    );
+
+            AITransportResponse response =
+                    transport.execute(transportRequest);
+
+            if (!response.isSuccess()) {
+                return AIResponse.failure(
+                        "Ollama HTTP error: "
+                                + response.getStatusCode()
+                                + " "
+                                + response.getError(),
+                        response.getStatusCode()
+                );
+            }
+
+            String output =
+                    extractOutputText(response.getBody());
+
+            if (output == null
+                    || output.trim().isEmpty()) {
+
+                return AIResponse.failure(
+                        "Ollama returned no text output",
+                        -62
+                );
+            }
+
+            return AIResponse.success(output);
+
+        } catch (Exception e) {
+            return AIResponse.failure(
+                    "Ollama response parsing failed: "
+                            + e.getMessage(),
+                    -63
+            );
+        }
+    }
+
+    private String getEndpoint() {
+        String endpoint =
+                getConfig().getEndpoint();
+
+        if (endpoint == null
+                || endpoint.trim().isEmpty()) {
+
+            return DEFAULT_ENDPOINT;
+        }
+
+        return endpoint;
+    }
+
+    private String extractOutputText(String raw) {
+        try {
+            JSONObject root =
+                    new JSONObject(raw);
+
+            JSONObject message =
+                    root.optJSONObject("message");
+
+            if (message == null) {
+                return "";
+            }
+
+            return message.optString(
+                    "content",
+                    ""
+            );
+
+        } catch (Exception e) {
+            return "";
+        }
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/AIProviderRouter.java ====================
+
+package com.atlas.app.ai;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class AIProviderRouter {
+
+    private final AIProviderRegistry registry;
+
+    public AIProviderRouter(AIProviderRegistry registry) {
+        this.registry = registry;
+    }
+
+    public ProviderSelection route(AITaskType taskType) {
+        return route(taskType, false);
+    }
+
+    public ProviderSelection route(
+            AITaskType taskType,
+            boolean localOnly
+    ) {
+        if (registry == null) {
+            return ProviderSelection.unavailable(
+                    "AI provider registry is missing"
+            );
+        }
+
+        List<AIProvider> available =
+                new ArrayList<>();
+
+        for (AIProvider provider : registry.getAll()) {
+            if (provider != null && provider.isAvailable()) {
+                available.add(provider);
+            }
+        }
+
+        if (available.isEmpty()) {
+            return ProviderSelection.unavailable(
+                    "No available AI provider"
+            );
+        }
+
+        if (localOnly
+                || taskType == AITaskType.PRIVATE
+                || taskType == AITaskType.LOCAL_AUTOMATION) {
+
+            AIProvider local = findType(
+                    available,
+                    AIProviderType.LOCAL
+            );
+
+            if (local != null) {
+                return ProviderSelection.selected(local);
+            }
+
+            if (localOnly) {
+                return ProviderSelection.unavailable(
+                        "No available local AI provider"
+                );
+            }
+        }
+
+        AIProvider preferred = findPreferred(
+                available,
+                taskType
+        );
+
+        if (preferred != null) {
+            return ProviderSelection.selected(preferred);
+        }
+
+        AIProvider hybrid = findType(
+                available,
+                AIProviderType.HYBRID
+        );
+
+        if (hybrid != null) {
+            return ProviderSelection.selected(hybrid);
+        }
+
+        AIProvider cloud = findType(
+                available,
+                AIProviderType.CLOUD
+        );
+
+        if (cloud != null) {
+            return ProviderSelection.selected(cloud);
+        }
+
+        return ProviderSelection.selected(
+                available.get(0)
+        );
+    }
+
+    private AIProvider findPreferred(
+            List<AIProvider> providers,
+            AITaskType taskType
+    ) {
+        if (taskType == null) {
+            return null;
+        }
+
+        switch (taskType) {
+
+            case CODING:
+            case CODE_REVIEW:
+            case ANALYSIS:
+            case PLANNING:
+                AIProvider cloud =
+                        findType(
+                                providers,
+                                AIProviderType.CLOUD
+                        );
+
+                if (cloud != null) {
+                    return cloud;
+                }
+
+                return findType(
+                        providers,
+                        AIProviderType.LOCAL
+                );
+
+            case CREATIVE:
+            case GENERAL:
+                return findType(
+                        providers,
+                        AIProviderType.CLOUD
+                );
+
+            default:
+                return null;
+        }
+    }
+
+    private AIProvider findType(
+            List<AIProvider> providers,
+            AIProviderType type
+    ) {
+        for (AIProvider provider : providers) {
+            if (provider.getType() == type) {
+                return provider;
+            }
+        }
+
+        return null;
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/AIProviderConfigLoader.java ====================
+
+package com.atlas.app.ai;
+
+public final class AIProviderConfigLoader {
+
+    private AIProviderConfigLoader() {
+    }
+
+    public static AIProviderConfig load(
+            String providerName,
+            String defaultEndpoint,
+            String defaultModel
+    ) {
+        String prefix =
+                "ATLAS_AI_"
+                        + normalizeProviderName(providerName)
+                        + "_";
+
+        String endpoint = read(prefix + "ENDPOINT");
+        String model = read(prefix + "MODEL");
+        String apiKey = read(prefix + "API_KEY");
+
+        // Generic values remain as fallback.
+        if (endpoint.isEmpty()) {
+            endpoint = read("ATLAS_AI_ENDPOINT");
+        }
+
+        if (model.isEmpty()) {
+            model = read("ATLAS_AI_MODEL");
+        }
+
+        if (apiKey.isEmpty()) {
+            apiKey = read("ATLAS_AI_API_KEY");
+        }
+
+        if (endpoint.isEmpty()) {
+            endpoint = defaultEndpoint == null
+                    ? ""
+                    : defaultEndpoint;
+        }
+
+        if (model.isEmpty()) {
+            model = defaultModel == null
+                    ? ""
+                    : defaultModel;
+        }
+
+        return new AIProviderConfig(
+                endpoint,
+                model,
+                apiKey
+        );
+    }
+
+    private static String normalizeProviderName(String providerName) {
+        if (providerName == null) {
+            return "";
+        }
+
+        return providerName
+                .trim()
+                .toUpperCase()
+                .replace('-', '_');
+    }
+
+    public static String getProviderName() {
+        return read("ATLAS_AI_PROVIDER");
+    }
+
+    private static String read(String name) {
+        String value = System.getenv(name);
+
+        if (value == null || value.trim().isEmpty()) {
+            value = System.getProperty(name);
+        }
+
+        return value == null
+                ? ""
+                : value.trim();
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/ai/AIProviderBootstrap.java ====================
+
+package com.atlas.app.ai;
+
+public final class AIProviderBootstrap {
+
+    private AIProviderBootstrap() {
+    }
+
+    public static AIProviderRegistry createRegistry() {
+        AIProviderRegistry registry =
+                new AIProviderRegistry();
+
+        AIProviderTransport transport =
+                new HttpAIProviderTransport();
+
+        AIProviderConfig openAIConfig =
+                AIProviderConfigLoader.load(
+                        "openai",
+                        OpenAIProvider.DEFAULT_ENDPOINT,
+                        ""
+                );
+
+        AIProviderConfig geminiConfig =
+                AIProviderConfigLoader.load(
+                        "gemini",
+                        GeminiProvider.DEFAULT_ENDPOINT,
+                        ""
+                );
+
+        AIProviderConfig claudeConfig =
+                AIProviderConfigLoader.load(
+                        "claude",
+                        ClaudeProvider.DEFAULT_ENDPOINT,
+                        ""
+                );
+
+        AIProviderConfig ollamaConfig =
+                AIProviderConfigLoader.load(
+                        "ollama",
+                        OllamaProvider.DEFAULT_ENDPOINT,
+                        ""
+                );
+
+        registry.register(
+                new OpenAIProvider(
+                        openAIConfig,
+                        transport
+                )
+        );
+
+        registry.register(
+                new GeminiProvider(
+                        geminiConfig,
+                        transport
+                )
+        );
+
+        registry.register(
+                new ClaudeProvider(
+                        claudeConfig,
+                        transport
+                )
+        );
+
+        registry.register(
+                new OllamaProvider(
+                        ollamaConfig,
+                        transport
+                )
+        );
+
+        return registry;
+    }
+
+    public static AIProviderRouter createRouter() {
+        return new AIProviderRouter(
+                createRegistry()
+        );
+    }
+}
+
+==================== FILE: app/src/main/java/com/atlas/app/update/AtlasUpdateManager.java ====================
+
+package com.atlas.app.update;
+
+import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+
+import androidx.core.content.FileProvider;
+
+import java.io.File;
+
+public final class AtlasUpdateManager {
+
+    private AtlasUpdateManager() {
+    }
+
+    public static boolean installApk(Context context, File apkFile) {
+        if (context == null || apkFile == null || !apkFile.isFile()) {
+            return false;
+        }
+
+        try {
+            Uri apkUri = FileProvider.getUriForFile(
+                    context,
+                    context.getPackageName() + ".fileprovider",
+                    apkFile
+            );
+
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(
+                    apkUri,
+                    "application/vnd.android.package-archive"
+            );
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            context.startActivity(intent);
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+}

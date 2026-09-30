@@ -138,6 +138,10 @@ public class ImprovementLabManager {
                         Path relative =
                                 source.relativize(dir);
 
+                        if (isExcluded(relative)) {
+                            return FileVisitResult.SKIP_SUBTREE;
+                        }
+
                         Path destination =
                                 target.resolve(relative);
 
@@ -153,6 +157,10 @@ public class ImprovementLabManager {
                     ) throws IOException {
                         Path relative =
                                 source.relativize(file);
+
+                        if (isExcluded(relative)) {
+                            return FileVisitResult.CONTINUE;
+                        }
 
                         Path destination =
                                 target.resolve(relative);
@@ -171,6 +179,25 @@ public class ImprovementLabManager {
                     }
                 }
         );
+    }
+
+    private boolean isExcluded(Path relative) {
+        if (relative == null) {
+            return false;
+        }
+
+        String path = relative.toString().replace('\\', '/');
+
+        return path.equals(".gradle")
+                || path.startsWith(".gradle/")
+                || path.equals("build")
+                || path.startsWith("build/")
+                || path.equals("app/build")
+                || path.startsWith("app/build/")
+                || path.equals("atlas-self-development-lab")
+                || path.startsWith("atlas-self-development-lab/")
+                || path.equals("atlas-self-development-target")
+                || path.startsWith("atlas-self-development-target/");
     }
 
     private void copyDirectory(

@@ -19,12 +19,7 @@ public class CommandDispatcher {
             Output output,
             ShellCommandExecutor shell
     ) {
-        this(
-                logger,
-                output,
-                shell,
-                null
-        );
+        this(logger, output, shell, null);
     }
 
     public CommandDispatcher(
@@ -76,11 +71,7 @@ public class CommandDispatcher {
                 break;
 
             default:
-                if (command.toLowerCase().startsWith("tool ")) {
-                    executeToolCommand(command);
-                } else {
-                    executeShell(command);
-                }
+                executeShell(command);
                 break;
         }
     }
@@ -106,118 +97,6 @@ public class CommandDispatcher {
                     "Shell command failed: "
                             + result.exitCode
             );
-        }
-    }
-
-    private void executeToolCommand(String command) {
-        if (runtime == null) {
-            output.print("Tool runtime is not connected");
-            return;
-        }
-
-        String[] parts = command.trim().split("\\s+");
-
-        if (parts.length < 2) {
-            output.print("Usage: tool <name> <action> [args...]");
-            return;
-        }
-
-        String toolName = parts[1];
-
-        if ("list".equalsIgnoreCase(toolName)) {
-            listTools();
-            return;
-        }
-
-        if ("info".equalsIgnoreCase(toolName)) {
-            if (parts.length < 3) {
-                output.print("Usage: tool info <name>");
-                return;
-            }
-
-            showToolInfo(parts[2]);
-            return;
-        }
-
-        if (parts.length < 3) {
-            output.print("Usage: tool <name> <action> [args...]");
-            return;
-        }
-
-        String action = parts[2];
-
-        String[] args = new String[Math.max(0, parts.length - 3)];
-
-        if (parts.length > 3) {
-            System.arraycopy(
-                    parts,
-                    3,
-                    args,
-                    0,
-                    parts.length - 3
-            );
-        }
-
-        logger.info(
-                "Tool command: " + toolName + " " + action
-        );
-
-        com.atlas.app.tool.ToolResult result =
-                runtime.executeTool(
-                        toolName,
-                        action,
-                        args
-                );
-
-        if (!result.output.isEmpty()) {
-            output.print(result.output.trim());
-        }
-
-        if (!result.success) {
-            logger.warn(
-                    "Tool failed: " + toolName +
-                    " / " + action +
-                    " / code=" + result.code
-            );
-        }
-    }
-
-    private void listTools() {
-        output.print("ATLAS Tools:");
-
-        for (com.atlas.app.tool.AtlasTool tool :
-                runtime.getToolRegistry().getAll()) {
-
-            output.print(
-                    "  " + tool.getName() +
-                    " - " + tool.getDescription()
-            );
-        }
-    }
-
-    private void showToolInfo(String toolName) {
-        com.atlas.app.tool.AtlasTool tool =
-                runtime.getTool(toolName);
-
-        if (tool == null) {
-            output.print("Tool not found: " + toolName);
-            return;
-        }
-
-        output.print("Tool: " + tool.getName());
-        output.print("Description: " + tool.getDescription());
-
-        if ("screen".equalsIgnoreCase(tool.getName())) {
-            output.print("Actions:");
-            output.print("  status");
-            output.print("  info");
-        } else if ("apps".equalsIgnoreCase(tool.getName())) {
-            output.print("Actions:");
-            output.print("  status");
-            output.print("  list");
-        } else if ("control".equalsIgnoreCase(tool.getName())) {
-            output.print("Actions:");
-            output.print("  status");
         }
     }
 
