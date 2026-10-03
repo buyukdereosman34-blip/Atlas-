@@ -6,45 +6,42 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public class ImprovementLabBuildExecutor {
+
+    private static final long TIMEOUT_MINUTES = 15L;
 
     public ImprovementLabBuildResult buildAndTest(
             ImprovementLabWorkspace workspace
     ) {
         if (workspace == null) {
-            return failure(
-                    "LAB workspace is missing",
-                    -1
-            );
+            return failure("LAB workspace is missing", -1);
         }
 
-        Path labPath =
-                Paths.get(workspace.getWorkspacePath())
-                        .toAbsolutePath()
-                        .normalize();
+        Path labPath = Paths.get(workspace.getWorkspacePath())
+                .toAbsolutePath()
+                .normalize();
 
         if (!Files.isDirectory(labPath)) {
-            return failure(
-                    "LAB workspace does not exist",
-                    -1
-            );
+            return failure("LAB workspace does not exist", -1);
         }
 
         if (!Files.exists(labPath.resolve("settings.gradle"))
                 && !Files.exists(labPath.resolve("settings.gradle.kts"))) {
-            return failure(
-                    "LAB workspace is not a Gradle project",
-                    -1
-            );
+            return failure("LAB workspace is not a Gradle project", -1);
         }
 
-        CommandResult build =
-                execute(
-                        labPath,
-                        "gradle",
-                        ":app:assembleDebug"
-                );
+        String gradle = resolveGradleCommand(labPath);
+
+        CommandResult build = executeNested(
+                labPath,
+                gradle,
+                ":app:assembleDebug"
+        );
 
         if (!build.success) {
             return new ImprovementLabBuildResult(
@@ -57,12 +54,11 @@ public class ImprovementLabBuildExecutor {
             );
         }
 
-        CommandResult test =
-                execute(
-                        labPath,
-                        "gradle",
-                        ":app:test"
-                );
+        CommandResult test = executeNested(
+                labPath,
+                gradle,
+                ":app:test"
+        );
 
         return new ImprovementLabBuildResult(
                 true,
@@ -74,47 +70,98 @@ public class ImprovementLabBuildExecutor {
         );
     }
 
-    private CommandResult execute(
+    private String resolveGradleCommand(Path labPath) {
+        Path gradlew = labPath.resolve("gradlew");
+        if (Files.isRegularFile(gradlew) && Files.isExecutable(gradlew)) {
+            return gradlew.toString();
+        }
+        return "gradle";
+    }
+
+    private CommandResult executeNested(
             Path workingDirectory,
             String command,
-            String argument
+            String task
     ) {
-        ProcessBuilder builder =
-                new ProcessBuilder(
-                        command,
-                        argument
-                );
+        List<String> args = new ArrayList<>();
+        args.add(command);
+        args.add("--no-daemon");
+        args.add("--offline");
+        args.add("-Dorg.gradle.daemon=false");
+        args.add("-Dorg.gradle.workers.max=1");
+        args.add("-Dorg.gradle.parallel=false");
+        args.add("-Dorg.gradle.vfs.watch=false");
+        args.add("-Dorg.gradle.configuration-cache=false");
+        args.add(task);
 
-        builder.directory(
-                workingDirectory.toFile()
-        );
-
+        ProcessBuilder builder = new ProcessBuilder(args);
+        builder.directory(workingDirectory.toFile());
         builder.redirectErrorStream(true);
 
-        StringBuilder output =
-                new StringBuilder();
+        Map<String, String> env = builder.environment();
+
+        String javaHome = System.getProperty("java.home");
+        if (javaHome != null) {
+            env.put("JAVA_HOME", javaHome);
+        }
+
+        String userHome = System.getProperty("user.home");
+        if (userHome != null) {
+            env.put("GRADLE_USER_HOME", userHome + "/.gradle");
+        }
+
+        String path = System.getenv("PATH");
+        if (path != null) {
+            env.put("PATH", path);
+        }
+
+        String androidHome = System.getenv("ANDROID_HOME");
+        if (androidHome != null) {
+            env.put("ANDROID_HOME", androidHome);
+        }
+        String androidSdkRoot = System.getenv("ANDROID_SDK_ROOT");
+        if (androidSdkRoot != null) {
+            env.put("ANDROID_SDK_ROOT", androidSdkRoot);
+        }
+        env.put("GRADLE_OPTS", "-Dorg.gradle.daemon=false");
+
+        StringBuilder output = new StringBuilder();
 
         try {
-            Process process =
-                    builder.start();
+            // DEBUG: dump env for diagnosis
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (java.util.Map.Entry<String, String> e : env.entrySet()) {
+                sb.append(e.getKey()).append("=").append(e.getValue()).append("\n");
+            }
+            java.nio.file.Files.write(
+                    java.nio.file.Paths.get(
+                            System.getProperty("user.home") + "/nested-gradle-env.txt"
+                    ),
+                    sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)
+            );
+        } catch (Exception ignored) {}
 
-            try (BufferedReader reader =
-                         new BufferedReader(
-                                 new InputStreamReader(
-                                         process.getInputStream()
-                                 )
-                         )) {
+        Process process = builder.start();
 
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream())
+            )) {
                 String line;
-
                 while ((line = reader.readLine()) != null) {
-                    output.append(line)
-                            .append('\n');
+                    output.append(line).append('\n');
                 }
             }
 
-            int exitCode =
-                    process.waitFor();
+            if (!process.waitFor(TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
+                process.destroyForcibly();
+                output.append("\n[LAB timed out after ")
+                        .append(TIMEOUT_MINUTES)
+                        .append(" minutes]\n");
+                return new CommandResult(false, -1, output.toString());
+            }
+
+            int exitCode = process.exitValue();
 
             return new CommandResult(
                     exitCode == 0,
@@ -123,15 +170,9 @@ public class ImprovementLabBuildExecutor {
             );
 
         } catch (IOException e) {
-            return new CommandResult(
-                    false,
-                    -1,
-                    e.toString()
-            );
-
+            return new CommandResult(false, -1, e.toString());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-
             return new CommandResult(
                     false,
                     -1,
@@ -145,26 +186,16 @@ public class ImprovementLabBuildExecutor {
             int exitCode
     ) {
         return new ImprovementLabBuildResult(
-                false,
-                false,
-                exitCode,
-                -1,
-                message,
-                ""
+                false, false, exitCode, -1, message, ""
         );
     }
 
     private static class CommandResult {
-
         private final boolean success;
         private final int exitCode;
         private final String output;
 
-        private CommandResult(
-                boolean success,
-                int exitCode,
-                String output
-        ) {
+        private CommandResult(boolean success, int exitCode, String output) {
             this.success = success;
             this.exitCode = exitCode;
             this.output = output;

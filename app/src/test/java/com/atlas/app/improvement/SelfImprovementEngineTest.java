@@ -1,6 +1,5 @@
 package com.atlas.app.improvement;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.File;
@@ -255,8 +254,6 @@ public class SelfImprovementEngineTest {
                 proposal.getStatus()
         );
     }
-    @Ignore("LAB E2E requires nested gradle; Termux JVM cannot fork test workers reliably. Run on real device or CI.")
-
     @Test
     public void executeSelfDevelopmentRunsEndToEnd()
             throws Exception {

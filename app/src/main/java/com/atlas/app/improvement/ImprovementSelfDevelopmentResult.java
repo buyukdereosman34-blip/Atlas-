@@ -12,6 +12,7 @@ public class ImprovementSelfDevelopmentResult {
     private final ImprovementLabEvaluationResult evaluationResult;
     private final ImprovementLabPromotionResult promotionResult;
     private final ImprovementLearningResult learningResult;
+    private final ImprovementFailureClassification failureClassification;
 
     public ImprovementSelfDevelopmentResult(
             boolean success,
@@ -25,6 +26,34 @@ public class ImprovementSelfDevelopmentResult {
             ImprovementLabPromotionResult promotionResult,
             ImprovementLearningResult learningResult
     ) {
+        this(
+                success,
+                stage,
+                message,
+                method,
+                proposal,
+                workspace,
+                buildResult,
+                evaluationResult,
+                promotionResult,
+                learningResult,
+                null
+        );
+    }
+
+    public ImprovementSelfDevelopmentResult(
+            boolean success,
+            String stage,
+            String message,
+            ImprovementMethod method,
+            ImprovementChangeProposal proposal,
+            ImprovementLabWorkspace workspace,
+            ImprovementLabBuildResult buildResult,
+            ImprovementLabEvaluationResult evaluationResult,
+            ImprovementLabPromotionResult promotionResult,
+            ImprovementLearningResult learningResult,
+            ImprovementFailureClassification failureClassification
+    ) {
         this.success = success;
         this.stage = stage;
         this.message = message;
@@ -35,6 +64,7 @@ public class ImprovementSelfDevelopmentResult {
         this.evaluationResult = evaluationResult;
         this.promotionResult = promotionResult;
         this.learningResult = learningResult;
+        this.failureClassification = failureClassification;
     }
 
     public boolean isSuccess() {
@@ -75,5 +105,13 @@ public class ImprovementSelfDevelopmentResult {
 
     public ImprovementLearningResult getLearningResult() {
         return learningResult;
+    }
+
+    public ImprovementFailureClassification getFailureClassification() {
+        return failureClassification;
+    }
+
+    public boolean hasFailureClassification() {
+        return failureClassification != null;
     }
 }

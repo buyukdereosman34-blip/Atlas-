@@ -15,6 +15,7 @@ public class ImprovementSelfDevelopmentLoop {
     private final ImprovementLabPromoter promoter;
     private final ImprovementLearning learning;
     private final ImprovementFixer fixer;
+    private final ImprovementFailureClassifier classifier;
 
     public ImprovementSelfDevelopmentLoop(
             ImprovementMethodStore methodStore
@@ -42,6 +43,20 @@ public class ImprovementSelfDevelopmentLoop {
             AIProviderRouter aiProviderRouter,
             ImprovementFixer fixer
     ) {
+        this(
+                methodStore,
+                aiProviderRouter,
+                fixer,
+                null
+        );
+    }
+
+    public ImprovementSelfDevelopmentLoop(
+            ImprovementMethodStore methodStore,
+            AIProviderRouter aiProviderRouter,
+            ImprovementFixer fixer,
+            ImprovementLabBuildExecutor buildExecutorOverride
+    ) {
         this.ranker = new ImprovementMethodRanker();
 
         this.proposalGenerator =
@@ -56,13 +71,17 @@ public class ImprovementSelfDevelopmentLoop {
         this.labManager =
                 new ImprovementLabManager();
         this.buildExecutor =
-                new ImprovementLabBuildExecutor();
+                buildExecutorOverride != null
+                        ? buildExecutorOverride
+                        : new ImprovementLabBuildExecutor();
         this.evaluator =
                 new ImprovementLabEvaluator();
         this.promoter =
                 new ImprovementLabPromoter();
         this.learning =
                 new ImprovementLearning(methodStore);
+        this.classifier =
+                new ImprovementFailureClassifier();
         this.fixer =
                 fixer != null
                         ? fixer
@@ -281,8 +300,46 @@ public class ImprovementSelfDevelopmentLoop {
                     labRoot
             );
 
+            ImprovementFailureClassification classification =
+                    classifier.classify(buildResult);
+
+            if (classification == null) {
+                classification = new ImprovementFailureClassification(
+                        ImprovementFailureCategory.UNKNOWN,
+                        "Classifier returned no result",
+                        ""
+                );
+            }
+
+            if (classification.isEnvironmentIssue()) {
+                ImprovementLearningResult learningResult =
+                        learning.record(method, false);
+
+                return new ImprovementSelfDevelopmentResult(
+                        false,
+                        "EVALUATION",
+                        "Environment/toolchain failure ["
+                                + classification.getCategory()
+                                + "] after "
+                                + attempt
+                                + " attempt(s): "
+                                + classification.getReason()
+                                + " - "
+                                + evaluationResult.getReason(),
+                        method,
+                        proposal,
+                        workspace,
+                        buildResult,
+                        evaluationResult,
+                        null,
+                        learningResult,
+                        classification
+                );
+            }
+
             if (attempt < maxAttempts
-                    && fixer != null) {
+                    && fixer != null
+                    && classification.isRetryable()) {
 
                 proposal =
                         fixer.fix(
@@ -304,7 +361,9 @@ public class ImprovementSelfDevelopmentLoop {
                     "EVALUATION",
                     "Self-development failed after "
                             + attempt
-                            + " attempt(s): "
+                            + " attempt(s) ["
+                            + classification.getCategory()
+                            + "]: "
                             + evaluationResult.getReason(),
                     method,
                     proposal,
@@ -312,7 +371,8 @@ public class ImprovementSelfDevelopmentLoop {
                     buildResult,
                     evaluationResult,
                     null,
-                    learningResult
+                    learningResult,
+                    classification
             );
         }
 
