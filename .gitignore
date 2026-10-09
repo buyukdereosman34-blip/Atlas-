@@ -30,3 +30,6 @@ backup_before_modules/
 # Accidental empty files
 /echo
 /{ 
+
+atlas_project.zip
+atlas_codebase.txt

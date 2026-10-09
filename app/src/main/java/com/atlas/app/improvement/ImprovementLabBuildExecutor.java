@@ -44,6 +44,44 @@ public class ImprovementLabBuildExecutor {
         );
 
         if (!build.success) {
+
+            // AAPT2 toolchain failure -> Java-only fallback
+            if (isAapt2Failure(build.output)) {
+
+                CommandResult javaOnly = executeNested(
+                        labPath,
+                        gradle,
+                        ":app:compileDebugJavaWithJavac"
+                );
+
+                if (javaOnly.success) {
+                    return new ImprovementLabBuildResult(
+                            true,
+                            false,
+                            javaOnly.exitCode,
+                            -1,
+                            javaOnly.output
+                                    + "\n\n[JAVA_ONLY_FALLBACK] "
+                                    + "AAPT2 toolchain failure. "
+                                    + "Only Java compilation verified. "
+                                    + "Resources and tests NOT verified.",
+                            "",
+                            ImprovementLabValidationMode.JAVA_ONLY
+                    );
+                }
+
+                return new ImprovementLabBuildResult(
+                        false,
+                        false,
+                        javaOnly.exitCode,
+                        -1,
+                        "AAPT2 toolchain failure AND Java fallback failed.\n\n"
+                                + javaOnly.output,
+                        "",
+                        ImprovementLabValidationMode.JAVA_ONLY
+                );
+            }
+
             return new ImprovementLabBuildResult(
                     false,
                     false,
@@ -68,6 +106,14 @@ public class ImprovementLabBuildExecutor {
                 build.output,
                 test.output
         );
+    }
+
+    private boolean isAapt2Failure(String output) {
+        if (output == null) {
+            return false;
+        }
+        return output.contains("AAPT2")
+                && output.contains("Daemon");
     }
 
     private String resolveGradleCommand(Path labPath) {

@@ -34,6 +34,22 @@ public class ImprovementLabEvaluator {
             );
         }
 
+        if (buildResult.isJavaOnlyPartial()) {
+            workspace.markChanged();
+
+            return new ImprovementLabEvaluationResult(
+                    false,
+                    ImprovementLabStatus.CHANGED,
+                    "[PARTIAL] Java compilation verified. "
+                            + "Resources NOT_VERIFIED. "
+                            + "Tests NOT_RUN. "
+                            + "Reason: AAPT2 toolchain failure.",
+                    buildResult.getBuildOutput(),
+                    buildResult.getTestOutput(),
+                    true
+            );
+        }
+
         if (!buildResult.isTestSuccess()) {
             workspace.markFailed();
 

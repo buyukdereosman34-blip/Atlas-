@@ -8,6 +8,7 @@ public class ImprovementLabBuildResult {
     private final int testExitCode;
     private final String buildOutput;
     private final String testOutput;
+    private final ImprovementLabValidationMode validationMode;
 
     public ImprovementLabBuildResult(
             boolean buildSuccess,
@@ -17,12 +18,36 @@ public class ImprovementLabBuildResult {
             String buildOutput,
             String testOutput
     ) {
+        this(
+                buildSuccess,
+                testSuccess,
+                buildExitCode,
+                testExitCode,
+                buildOutput,
+                testOutput,
+                ImprovementLabValidationMode.FULL
+        );
+    }
+
+    public ImprovementLabBuildResult(
+            boolean buildSuccess,
+            boolean testSuccess,
+            int buildExitCode,
+            int testExitCode,
+            String buildOutput,
+            String testOutput,
+            ImprovementLabValidationMode validationMode
+    ) {
         this.buildSuccess = buildSuccess;
         this.testSuccess = testSuccess;
         this.buildExitCode = buildExitCode;
         this.testExitCode = testExitCode;
         this.buildOutput = buildOutput;
         this.testOutput = testOutput;
+        this.validationMode =
+                validationMode == null
+                        ? ImprovementLabValidationMode.FULL
+                        : validationMode;
     }
 
     public boolean isBuildSuccess() {
@@ -47,6 +72,15 @@ public class ImprovementLabBuildResult {
 
     public String getTestOutput() {
         return testOutput;
+    }
+
+    public ImprovementLabValidationMode getValidationMode() {
+        return validationMode;
+    }
+
+    public boolean isJavaOnlyPartial() {
+        return validationMode == ImprovementLabValidationMode.JAVA_ONLY
+                && buildSuccess;
     }
 
     public boolean isSuccessful() {

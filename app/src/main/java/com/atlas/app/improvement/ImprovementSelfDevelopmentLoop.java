@@ -249,6 +249,29 @@ public class ImprovementSelfDevelopmentLoop {
             lastBuildResult = buildResult;
             lastEvaluationResult = evaluationResult;
 
+            if (evaluationResult.isPartial()) {
+                ImprovementLearningResult learningResult =
+                        learning.record(method, false);
+
+                return new ImprovementSelfDevelopmentResult(
+                        false,
+                        "PARTIAL",
+                        evaluationResult.getReason(),
+                        method,
+                        proposal,
+                        workspace,
+                        buildResult,
+                        evaluationResult,
+                        null,
+                        learningResult,
+                        new ImprovementFailureClassification(
+                                ImprovementFailureCategory.TOOLCHAIN,
+                                "AAPT2 toolchain failure - partial validation only",
+                                ""
+                        )
+                );
+            }
+
             if (evaluationResult.isPassed()) {
 
                 ImprovementLabPromotionResult promotionResult =
