@@ -15,6 +15,7 @@ public class ImprovementSelfDevelopmentLoop {
     private final ImprovementLabPromoter promoter;
     private final ImprovementLearning learning;
     private final ImprovementFixer fixer;
+    private final ImprovementStuckDetector stuckDetector;
     private final ImprovementFailureClassifier classifier;
 
     public ImprovementSelfDevelopmentLoop(
@@ -80,6 +81,8 @@ public class ImprovementSelfDevelopmentLoop {
                 new ImprovementLabPromoter();
         this.learning =
                 new ImprovementLearning(methodStore);
+        this.stuckDetector =
+                new ImprovementStuckDetector();
         this.classifier =
                 new ImprovementFailureClassifier();
         this.fixer =
@@ -138,6 +141,8 @@ public class ImprovementSelfDevelopmentLoop {
         ImprovementLabEvaluationResult lastEvaluationResult = null;
 
         final int maxAttempts = 3;
+
+        ImprovementFailureSignature previousSignature = null;
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
 
@@ -359,6 +364,31 @@ public class ImprovementSelfDevelopmentLoop {
                         classification
                 );
             }
+
+            ImprovementFailureSignature currentSignature =
+                    ImprovementFailureSignature.from(classification);
+
+            if (stuckDetector.isStuck(previousSignature, currentSignature)) {
+                ImprovementLearningResult learningResult =
+                        learning.record(method, false);
+
+                return new ImprovementSelfDevelopmentResult(
+                        false,
+                        "STUCK",
+                        "[STUCK] Same failure repeated: "
+                                + currentSignature,
+                        method,
+                        proposal,
+                        workspace,
+                        buildResult,
+                        evaluationResult,
+                        null,
+                        learningResult,
+                        classification
+                );
+            }
+
+            previousSignature = currentSignature;
 
             if (attempt < maxAttempts
                     && fixer != null
