@@ -21,6 +21,11 @@ android {
 
     testOptions {
         unitTests.all {
+            // Termux/Android sandbox: her test class icin temiz JVM
+            // Paralel JVM fork sorununu onler (signal 36, EOFException)
+            forkEvery = 1
+            maxParallelForks = 1
+
             def atlasEnv = [:]
             def atlasEnvFile = new File(System.getProperty("user.home"), ".config/atlas/env")
 
