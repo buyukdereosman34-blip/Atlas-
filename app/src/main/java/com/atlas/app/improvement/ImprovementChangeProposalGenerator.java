@@ -98,15 +98,103 @@ public class ImprovementChangeProposalGenerator {
 
         generatedFiles.addAll(proposedFileContents.keySet());
 
+        List<String> finalFiles =
+                new java.util.ArrayList<>(generatedFiles);
+
+        String risk = calculateRisk(finalFiles);
+        boolean reversible = calculateReversible(finalFiles);
+
         return new ImprovementChangeProposal(
                 what,
                 why,
-                new java.util.ArrayList<>(generatedFiles),
+                finalFiles,
                 expectedResult,
-                "MEDIUM",
-                true,
+                risk,
+                reversible,
                 validation,
                 proposedFileContents
         );
+    }
+
+    private String calculateRisk(List<String> files) {
+        if (files == null || files.isEmpty()) {
+            return "HIGH";
+        }
+
+        boolean hasHigh = false;
+        boolean hasMedium = false;
+
+        for (String file : files) {
+            if (file == null) {
+                continue;
+            }
+
+            String lower = file.toLowerCase();
+
+            if (isHighRiskPath(lower)) {
+                hasHigh = true;
+                break;
+            }
+
+            if (isMediumRiskPath(lower)) {
+                hasMedium = true;
+            }
+        }
+
+        if (hasHigh) {
+            return "HIGH";
+        }
+        if (hasMedium) {
+            return "MEDIUM";
+        }
+        return "LOW";
+    }
+
+    private boolean isHighRiskPath(String lower) {
+        return lower.contains("improvement/")
+                || lower.contains("policy/")
+                || lower.contains("permission/")
+                || lower.contains("safety")
+                || lower.endsWith("androidmanifest.xml")
+                || lower.endsWith("settings.gradle")
+                || lower.endsWith("settings.gradle.kts")
+                || lower.endsWith("gradle.properties");
+    }
+
+    private boolean isMediumRiskPath(String lower) {
+        return lower.endsWith(".gradle")
+                || lower.endsWith(".gradle.kts")
+                || lower.endsWith(".xml")
+                || lower.endsWith(".properties");
+    }
+
+    private boolean calculateReversible(List<String> files) {
+        if (files == null || files.isEmpty()) {
+            return false;
+        }
+
+        for (String file : files) {
+            if (file == null) {
+                continue;
+            }
+
+            String lower = file.toLowerCase();
+
+            // Bilinen kaynak kod / yapilandirma dosyalari
+            // git ile geri alinabilir.
+            if (lower.endsWith(".java")
+                    || lower.endsWith(".kt")
+                    || lower.endsWith(".xml")
+                    || lower.endsWith(".gradle")
+                    || lower.endsWith(".gradle.kts")
+                    || lower.endsWith(".properties")) {
+                continue;
+            }
+
+            // Bilinmeyen tip -> temkinli
+            return false;
+        }
+
+        return true;
     }
 }
