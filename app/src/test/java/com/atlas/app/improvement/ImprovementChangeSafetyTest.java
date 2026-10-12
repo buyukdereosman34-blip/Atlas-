@@ -166,4 +166,179 @@ public class ImprovementChangeSafetyTest {
                 report.getDecision()
         );
     }
+
+    @Test
+    public void requiresReviewForAndroidManifest() {
+        ImprovementChangeProposal proposal =
+                new ImprovementChangeProposal(
+                        "Update manifest",
+                        "Add new permission",
+                        Arrays.asList("app/src/main/AndroidManifest.xml"),
+                        "Build passes",
+                        "LOW",
+                        true,
+                        new ImprovementValidation(
+                                "Build project",
+                                "Build succeeds"
+                        )
+                );
+
+        ImprovementChangeSafetyReport report =
+                new ImprovementChangeSafety()
+                        .evaluate(proposal);
+
+        assertEquals(
+                ImprovementChangeSafetyDecision.REQUIRE_REVIEW,
+                report.getDecision()
+        );
+    }
+
+    @Test
+    public void requiresReviewForGradleFile() {
+        ImprovementChangeProposal proposal =
+                new ImprovementChangeProposal(
+                        "Update gradle",
+                        "Change build config",
+                        Arrays.asList("app/build.gradle"),
+                        "Build passes",
+                        "LOW",
+                        true,
+                        new ImprovementValidation(
+                                "Build project",
+                                "Build succeeds"
+                        )
+                );
+
+        ImprovementChangeSafetyReport report =
+                new ImprovementChangeSafety()
+                        .evaluate(proposal);
+
+        assertEquals(
+                ImprovementChangeSafetyDecision.REQUIRE_REVIEW,
+                report.getDecision()
+        );
+    }
+
+    @Test
+    public void requiresReviewForImprovementPath() {
+        ImprovementChangeProposal proposal =
+                new ImprovementChangeProposal(
+                        "Self-improve",
+                        "Modify improvement loop",
+                        Arrays.asList(
+                                "app/src/main/java/com/atlas/app/improvement/"
+                                        + "ImprovementSelfDevelopmentLoop.java"
+                        ),
+                        "Tests pass",
+                        "LOW",
+                        true,
+                        new ImprovementValidation(
+                                "Run tests",
+                                "All tests pass"
+                        )
+                );
+
+        ImprovementChangeSafetyReport report =
+                new ImprovementChangeSafety()
+                        .evaluate(proposal);
+
+        assertEquals(
+                ImprovementChangeSafetyDecision.REQUIRE_REVIEW,
+                report.getDecision()
+        );
+    }
+
+    @Test
+    public void requiresReviewForPolicyPath() {
+        ImprovementChangeProposal proposal =
+                new ImprovementChangeProposal(
+                        "Update policy",
+                        "Change policy engine",
+                        Arrays.asList(
+                                "app/src/main/java/com/atlas/app/policy/"
+                                        + "PolicyEngine.java"
+                        ),
+                        "Tests pass",
+                        "LOW",
+                        true,
+                        new ImprovementValidation(
+                                "Run tests",
+                                "All tests pass"
+                        )
+                );
+
+        ImprovementChangeSafetyReport report =
+                new ImprovementChangeSafety()
+                        .evaluate(proposal);
+
+        assertEquals(
+                ImprovementChangeSafetyDecision.REQUIRE_REVIEW,
+                report.getDecision()
+        );
+    }
+
+    @Test
+    public void requiresReviewForMoreThanFiveFiles() {
+        ImprovementChangeProposal proposal =
+                new ImprovementChangeProposal(
+                        "Large refactor",
+                        "Touch many files",
+                        Arrays.asList(
+                                "src/A.java",
+                                "src/B.java",
+                                "src/C.java",
+                                "src/D.java",
+                                "src/E.java",
+                                "src/F.java"
+                        ),
+                        "Tests pass",
+                        "LOW",
+                        true,
+                        new ImprovementValidation(
+                                "Run tests",
+                                "All tests pass"
+                        )
+                );
+
+        ImprovementChangeSafetyReport report =
+                new ImprovementChangeSafety()
+                        .evaluate(proposal);
+
+        assertEquals(
+                ImprovementChangeSafetyDecision.REQUIRE_REVIEW,
+                report.getDecision()
+        );
+    }
+
+    @Test
+    public void allowsExactlyFiveFiles() {
+        ImprovementChangeProposal proposal =
+                new ImprovementChangeProposal(
+                        "Small refactor",
+                        "Touch exactly five files",
+                        Arrays.asList(
+                                "src/A.java",
+                                "src/B.java",
+                                "src/C.java",
+                                "src/D.java",
+                                "src/E.java"
+                        ),
+                        "Tests pass",
+                        "LOW",
+                        true,
+                        new ImprovementValidation(
+                                "Run tests",
+                                "All tests pass"
+                        )
+                );
+
+        ImprovementChangeSafetyReport report =
+                new ImprovementChangeSafety()
+                        .evaluate(proposal);
+
+        assertEquals(
+                ImprovementChangeSafetyDecision.ALLOW,
+                report.getDecision()
+        );
+    }
 }
