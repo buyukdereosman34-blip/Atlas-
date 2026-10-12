@@ -59,6 +59,38 @@ public class ImprovementChangeSafety {
             );
         }
 
+        // === File-based risk calculation ===
+        List<String> files = proposal.getAffectedFiles();
+
+        for (String file : files) {
+            if (isSensitiveFile(file)) {
+                return report(
+                        ImprovementChangeSafetyDecision.REQUIRE_REVIEW,
+                        "Sensitive file in scope: " + file,
+                        "The change touches a critical configuration "
+                                + "or self-modification path",
+                        "HIGH",
+                        proposal.isReversible(),
+                        Collections.emptyList(),
+                        proposal.getValidation()
+                );
+            }
+        }
+
+        if (files.size() > 5) {
+            return report(
+                    ImprovementChangeSafetyDecision.REQUIRE_REVIEW,
+                    "Change affects more than 5 files ("
+                            + files.size()
+                            + ")",
+                    "The scope of the change is large",
+                    "HIGH",
+                    proposal.isReversible(),
+                    Collections.emptyList(),
+                    proposal.getValidation()
+            );
+        }
+
         String normalizedRisk =
                 proposal.getRisk() == null
                         ? ""
@@ -110,6 +142,26 @@ public class ImprovementChangeSafety {
                 permissions,
                 validation
         );
+    }
+
+    private boolean isSensitiveFile(String path) {
+        if (path == null) {
+            return false;
+        }
+
+        String lower = path.toLowerCase();
+
+        return lower.endsWith("androidmanifest.xml")
+                || lower.endsWith("build.gradle")
+                || lower.endsWith("build.gradle.kts")
+                || lower.endsWith("settings.gradle")
+                || lower.endsWith("settings.gradle.kts")
+                || lower.endsWith("gradle.properties")
+                || lower.contains("/.github/")
+                || lower.contains("improvement/")
+                || lower.contains("permission")
+                || lower.contains("policy")
+                || lower.contains("safety");
     }
 
     private boolean isBlank(String value) {
