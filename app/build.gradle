@@ -63,6 +63,24 @@ android {
                             "ATLAS_AI_GEMINI_API_KEY",
                             System.getenv("ATLAS_AI_GEMINI_API_KEY") ?: atlasEnv["ATLAS_AI_GEMINI_API_KEY"] ?: ""
                     )
+
+            environment "ATLAS_AI_GROQ_API_KEY",
+                    System.getProperty(
+                            "ATLAS_AI_GROQ_API_KEY",
+                            System.getenv("ATLAS_AI_GROQ_API_KEY") ?: atlasEnv["ATLAS_AI_GROQ_API_KEY"] ?: ""
+                    )
+
+            environment "ATLAS_AI_OPENROUTER_API_KEY",
+                    System.getProperty(
+                            "ATLAS_AI_OPENROUTER_API_KEY",
+                            System.getenv("ATLAS_AI_OPENROUTER_API_KEY") ?: atlasEnv["ATLAS_AI_OPENROUTER_API_KEY"] ?: ""
+                    )
+
+            environment "ATLAS_AI_CEREBRAS_API_KEY",
+                    System.getProperty(
+                            "ATLAS_AI_CEREBRAS_API_KEY",
+                            System.getenv("ATLAS_AI_CEREBRAS_API_KEY") ?: atlasEnv["ATLAS_AI_CEREBRAS_API_KEY"] ?: ""
+                    )
         }
     }
 
