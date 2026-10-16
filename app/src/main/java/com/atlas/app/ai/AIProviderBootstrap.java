@@ -44,21 +44,21 @@ public final class AIProviderBootstrap {
                 AIProviderConfigLoader.load(
                         "groq",
                         "https://api.groq.com/openai/v1/chat/completions",
-                        "llama-3.3-70b-versatile"
+                        ""
                 );
 
         AIProviderConfig openRouterConfig =
                 AIProviderConfigLoader.load(
                         "openrouter",
                         "https://openrouter.ai/api/v1/chat/completions",
-                        "meta-llama/llama-3.2-3b-instruct:free"
+                        ""
                 );
 
         AIProviderConfig cerebrasConfig =
                 AIProviderConfigLoader.load(
                         "cerebras",
                         "https://api.cerebras.ai/v1/chat/completions",
-                        "llama3.1-8b"
+                        ""
                 );
 
         registry.register(
