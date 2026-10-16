@@ -61,6 +61,34 @@ public final class AIProviderBootstrap {
                         ""
                 );
 
+        AIProviderConfig mistralConfig =
+                AIProviderConfigLoader.load(
+                        "mistral",
+                        "https://api.mistral.ai/v1/chat/completions",
+                        ""
+                );
+
+        AIProviderConfig huggingFaceConfig =
+                AIProviderConfigLoader.load(
+                        "huggingface",
+                        "https://api-inference.huggingface.co/v1/chat/completions",
+                        ""
+                );
+
+        AIProviderConfig togetherConfig =
+                AIProviderConfigLoader.load(
+                        "together",
+                        "https://api.together.xyz/v1/chat/completions",
+                        ""
+                );
+
+        AIProviderConfig deepSeekConfig =
+                AIProviderConfigLoader.load(
+                        "deepseek",
+                        "https://api.deepseek.com/v1/chat/completions",
+                        ""
+                );
+
         registry.register(
                 new OpenAIProvider(
                         openAIConfig,
@@ -112,6 +140,42 @@ public final class AIProviderBootstrap {
                         "cerebras",
                         "https://api.cerebras.ai/v1/chat/completions",
                         cerebrasConfig,
+                        transport
+                )
+        );
+
+        registry.register(
+                new OpenAICompatibleProvider(
+                        "mistral",
+                        "https://api.mistral.ai/v1/chat/completions",
+                        mistralConfig,
+                        transport
+                )
+        );
+
+        registry.register(
+                new OpenAICompatibleProvider(
+                        "huggingface",
+                        "https://api-inference.huggingface.co/v1/chat/completions",
+                        huggingFaceConfig,
+                        transport
+                )
+        );
+
+        registry.register(
+                new OpenAICompatibleProvider(
+                        "together",
+                        "https://api.together.xyz/v1/chat/completions",
+                        togetherConfig,
+                        transport
+                )
+        );
+
+        registry.register(
+                new OpenAICompatibleProvider(
+                        "deepseek",
+                        "https://api.deepseek.com/v1/chat/completions",
+                        deepSeekConfig,
                         transport
                 )
         );

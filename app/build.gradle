@@ -81,6 +81,30 @@ android {
                             "ATLAS_AI_CEREBRAS_API_KEY",
                             System.getenv("ATLAS_AI_CEREBRAS_API_KEY") ?: atlasEnv["ATLAS_AI_CEREBRAS_API_KEY"] ?: ""
                     )
+
+            environment "ATLAS_AI_MISTRAL_API_KEY",
+                    System.getProperty(
+                            "ATLAS_AI_MISTRAL_API_KEY",
+                            System.getenv("ATLAS_AI_MISTRAL_API_KEY") ?: atlasEnv["ATLAS_AI_MISTRAL_API_KEY"] ?: ""
+                    )
+
+            environment "ATLAS_AI_HUGGINGFACE_API_KEY",
+                    System.getProperty(
+                            "ATLAS_AI_HUGGINGFACE_API_KEY",
+                            System.getenv("ATLAS_AI_HUGGINGFACE_API_KEY") ?: atlasEnv["ATLAS_AI_HUGGINGFACE_API_KEY"] ?: ""
+                    )
+
+            environment "ATLAS_AI_TOGETHER_API_KEY",
+                    System.getProperty(
+                            "ATLAS_AI_TOGETHER_API_KEY",
+                            System.getenv("ATLAS_AI_TOGETHER_API_KEY") ?: atlasEnv["ATLAS_AI_TOGETHER_API_KEY"] ?: ""
+                    )
+
+            environment "ATLAS_AI_DEEPSEEK_API_KEY",
+                    System.getProperty(
+                            "ATLAS_AI_DEEPSEEK_API_KEY",
+                            System.getenv("ATLAS_AI_DEEPSEEK_API_KEY") ?: atlasEnv["ATLAS_AI_DEEPSEEK_API_KEY"] ?: ""
+                    )
         }
     }
 
