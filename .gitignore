@@ -33,3 +33,6 @@ backup_before_modules/
 
 atlas_project.zip
 atlas_codebase.txt
+
+atlas_codebase_*.txt
+atlas_project_*.zip
