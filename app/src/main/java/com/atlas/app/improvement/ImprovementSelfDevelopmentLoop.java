@@ -143,6 +143,7 @@ public class ImprovementSelfDevelopmentLoop {
         final int maxAttempts = 3;
 
         ImprovementFailureSignature previousSignature = null;
+        int consecutiveCount = 0;
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
 
@@ -368,14 +369,55 @@ public class ImprovementSelfDevelopmentLoop {
             ImprovementFailureSignature currentSignature =
                     ImprovementFailureSignature.from(classification);
 
-            if (stuckDetector.isStuck(previousSignature, currentSignature)) {
+            // Sayaç güncelle: aynı imza mı, yeni mi?
+            if (previousSignature != null
+                    && previousSignature.equals(currentSignature)) {
+                consecutiveCount++;
+            } else {
+                consecutiveCount = 1;
+            }
+
+            // Stuck mı? (kategori bazlı limit: CODE=3, diğerleri=2)
+            boolean isStuck = stuckDetector.isStuck(
+                    previousSignature,
+                    currentSignature,
+                    consecutiveCount,
+                    classification.getCategory()
+            );
+
+            // ÖNCE fixer hakkı ver (ama stuck değilse ve deneme hakkı varsa)
+            if (attempt < maxAttempts
+                    && fixer != null
+                    && classification.isRetryable()
+                    && !isStuck) {
+
+                proposal =
+                        fixer.fix(
+                                task,
+                                finding,
+                                proposal,
+                                buildResult,
+                                evaluationResult
+                        );
+
+                previousSignature = currentSignature;
+                continue;
+            }
+
+            // Fixer hakkı bitti veya stuck → STUCK dön
+            if (isStuck) {
                 ImprovementLearningResult learningResult =
                         learning.record(method, false);
 
                 return new ImprovementSelfDevelopmentResult(
                         false,
                         "STUCK",
-                        "[STUCK] Same failure repeated: "
+                        "[STUCK] Same failure repeated "
+                                + consecutiveCount
+                                + " times (limit: "
+                                + (classification.getCategory()
+                                        == ImprovementFailureCategory.CODE ? 3 : 2)
+                                + "): "
                                 + currentSignature,
                         method,
                         proposal,
@@ -389,22 +431,6 @@ public class ImprovementSelfDevelopmentLoop {
             }
 
             previousSignature = currentSignature;
-
-            if (attempt < maxAttempts
-                    && fixer != null
-                    && classification.isRetryable()) {
-
-                proposal =
-                        fixer.fix(
-                                task,
-                                finding,
-                                proposal,
-                                buildResult,
-                                evaluationResult
-                        );
-
-                continue;
-            }
 
             ImprovementLearningResult learningResult =
                     learning.record(method, false);
