@@ -1,7 +1,7 @@
 # ATLAS — Project State
 
 **Son güncelleme:** 2026-10-14
-**Son commit:** 1689da2
+**Son commit:** 6cafa1b
 **Durum:** Aktif geliştirme, ~%25
 
 ## Tamamlananlar

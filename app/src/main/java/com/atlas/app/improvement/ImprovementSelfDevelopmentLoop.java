@@ -140,7 +140,17 @@ public class ImprovementSelfDevelopmentLoop {
         ImprovementLabBuildResult lastBuildResult = null;
         ImprovementLabEvaluationResult lastEvaluationResult = null;
 
-        final int maxAttempts = 3;
+        // === STATE MACHINE BASLANGICI ===
+        DevelopmentState currentState = DevelopmentState.PROPOSED;
+        currentState = DevelopmentState.PENDING_APPROVAL;
+        
+        boolean userApproved = requestApproval();
+        if (!userApproved) {
+            return failure("APPROVAL", "Development proposal rejected by user");
+        }
+        currentState = DevelopmentState.APPROVED;
+
+        final int maxAttempts = 4;
 
         ImprovementFailureSignature previousSignature = null;
         int consecutiveCount = 0;
@@ -242,10 +252,13 @@ public class ImprovementSelfDevelopmentLoop {
             }
 
             workspace.markChanged();
+            currentState = DevelopmentState.APPLYING;
 
             ImprovementLabBuildResult buildResult =
                     buildExecutor.buildAndTest(workspace);
 
+            currentState = DevelopmentState.VALIDATING;
+            
             ImprovementLabEvaluationResult evaluationResult =
                     evaluator.evaluate(
                             workspace,
@@ -303,6 +316,8 @@ public class ImprovementSelfDevelopmentLoop {
                             learningResult
                     );
                 }
+
+                currentState = DevelopmentState.PROMOTED;
 
                 ImprovementLearningResult learningResult =
                         learning.record(method, true);
@@ -503,5 +518,10 @@ public class ImprovementSelfDevelopmentLoop {
                 null,
                 null
         );
+    }
+
+    private boolean requestApproval() {
+        // TODO: UI baglantisi yapilana kadar otomatik onay (Simdilik True)
+        return true;
     }
 }

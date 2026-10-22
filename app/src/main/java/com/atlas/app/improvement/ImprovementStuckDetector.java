@@ -16,7 +16,8 @@ public final class ImprovementStuckDetector {
             return false;
         }
 
-        int limit = (category == ImprovementFailureCategory.CODE) ? 3 : 2;
+        // CODE: 4 build denemesi = 3 fixer hakki. Digerleri: 2 build = 1 fixer.
+        int limit = (category == ImprovementFailureCategory.CODE) ? 4 : 2;
         return consecutiveCount >= limit;
     }
 

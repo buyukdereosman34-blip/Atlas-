@@ -45,11 +45,19 @@ public class ImprovementStuckDetectorTest {
                 ImprovementFailureCategory.CODE
         ));
 
-        // Attempt 3: STUCK (limit reached)
-        assertTrue(detector.isStuck(
+        // Attempt 3: still not stuck (limit is 4)
+        assertFalse(detector.isStuck(
                 sig,
                 sig,
                 3,
+                ImprovementFailureCategory.CODE
+        ));
+
+        // Attempt 4: STUCK (limit reached)
+        assertTrue(detector.isStuck(
+                sig,
+                sig,
+                4,
                 ImprovementFailureCategory.CODE
         ));
     }
