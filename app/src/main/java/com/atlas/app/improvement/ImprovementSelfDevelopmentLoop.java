@@ -16,6 +16,16 @@ public class ImprovementSelfDevelopmentLoop {
     private final ImprovementLearning learning;
     private final ImprovementFixer fixer;
     private final ImprovementStuckDetector stuckDetector;
+    
+    public interface ApprovalCallback {
+        boolean requestApproval(ImprovementChangeProposal proposal, String diffSummary);
+    }
+    
+    private ApprovalCallback approvalCallback = (p, d) -> true;
+
+    public void setApprovalCallback(ApprovalCallback callback) {
+        this.approvalCallback = callback != null ? callback : (p, d) -> true;
+    }
     private final ImprovementFailureClassifier classifier;
 
     public ImprovementSelfDevelopmentLoop(
@@ -144,8 +154,9 @@ public class ImprovementSelfDevelopmentLoop {
         DevelopmentState currentState = DevelopmentState.PROPOSED;
         currentState = DevelopmentState.PENDING_APPROVAL;
         
-        boolean userApproved = requestApproval();
+        boolean userApproved = approvalCallback.requestApproval(proposal, "");
         if (!userApproved) {
+            currentState = DevelopmentState.REJECTED;
             return failure("APPROVAL", "Development proposal rejected by user");
         }
         currentState = DevelopmentState.APPROVED;
@@ -431,7 +442,7 @@ public class ImprovementSelfDevelopmentLoop {
                                 + consecutiveCount
                                 + " times (limit: "
                                 + (classification.getCategory()
-                                        == ImprovementFailureCategory.CODE ? 3 : 2)
+                                        == ImprovementFailureCategory.CODE ? 4 : 2)
                                 + "): "
                                 + currentSignature,
                         method,
@@ -520,8 +531,4 @@ public class ImprovementSelfDevelopmentLoop {
         );
     }
 
-    private boolean requestApproval() {
-        // TODO: UI baglantisi yapilana kadar otomatik onay (Simdilik True)
-        return true;
-    }
 }

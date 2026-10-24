@@ -22,7 +22,13 @@ public final class ImprovementSafeRollback {
             return false;
         }
 
-        File labDir = new File(labPath);
+        File labDir;
+        try {
+            // PATH TRAVERSAL KORUMASI: Yolu canonical hale getirerek ../ saldirilarini onle
+            labDir = new File(labPath).getCanonicalFile();
+        } catch (Exception e) {
+            return false;
+        }
 
         if (!labDir.exists() || !labDir.isDirectory()) {
             return false;
@@ -53,10 +59,24 @@ public final class ImprovementSafeRollback {
             pb.directory(workingDir);
             pb.redirectErrorStream(true);
 
-            Process process = pb.start();
-            int exitCode = process.waitFor();
+            // Claude'un uyarisi: GIT_DIR sizmasini engelle
+            pb.environment().remove("GIT_DIR");
+            pb.environment().remove("GIT_WORK_TREE");
 
-            return exitCode == 0;
+            Process process = pb.start();
+            // Claude'un uyarisi: Okuma yapilmali, yoksa pipe dolabilir
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()))) {
+                while (reader.readLine() != null) { }
+            }
+            
+            // Timeout ekle (30 saniye)
+            if (!process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                return false;
+            }
+
+            return process.exitValue() == 0;
 
         } catch (Exception e) {
             return false;

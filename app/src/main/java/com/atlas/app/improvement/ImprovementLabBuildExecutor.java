@@ -174,20 +174,6 @@ public class ImprovementLabBuildExecutor {
         StringBuilder output = new StringBuilder();
 
         try {
-            // DEBUG: dump env for diagnosis
-        try {
-            StringBuilder sb = new StringBuilder();
-            for (java.util.Map.Entry<String, String> e : env.entrySet()) {
-                sb.append(e.getKey()).append("=").append(e.getValue()).append("\n");
-            }
-            java.nio.file.Files.write(
-                    java.nio.file.Paths.get(
-                            System.getProperty("user.home") + "/nested-gradle-env.txt"
-                    ),
-                    sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)
-            );
-        } catch (Exception ignored) {}
-
         Process process = builder.start();
 
             try (BufferedReader reader = new BufferedReader(
