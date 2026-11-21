@@ -1,6 +1,8 @@
 package com.atlas.app.tool.improvement;
 
-import com.atlas.app.improvement.AtlasDevelopmentEngine;
+import com.atlas.app.improvement.ImprovementRealLabChangeApplier;
+import com.atlas.app.improvement.ImprovementTask;
+import com.atlas.app.improvement.SelfImprovementEngine;
 import com.atlas.app.improvement.ImprovementSelfDevelopmentResult;
 import com.atlas.app.runtime.AtlasRuntime;
 import com.atlas.app.tool.AtlasTool;
@@ -14,11 +16,11 @@ import java.util.List;
 public class SelfDevelopmentTool implements AtlasTool {
 
     private final AtlasRuntime runtime;
-    private final AtlasDevelopmentEngine engine;
+    private final SelfImprovementEngine engine;
 
     public SelfDevelopmentTool(AtlasRuntime runtime) {
         this.runtime = runtime;
-        this.engine = new AtlasDevelopmentEngine();
+        this.engine = new SelfImprovementEngine();
     }
 
     @Override
@@ -99,13 +101,13 @@ public class SelfDevelopmentTool implements AtlasTool {
                 );
 
         ImprovementSelfDevelopmentResult result =
-                engine.develop(
-                        title,
-                        description,
+                engine.executeSelfDevelopment(
+                        new ImprovementTask(title, description),
                         affectedFiles,
                         source.getAbsolutePath(),
                         labRoot.getAbsolutePath(),
-                        target.getAbsolutePath()
+                        target.getAbsolutePath(),
+                        new ImprovementRealLabChangeApplier()
                 );
 
         if (result == null) {
