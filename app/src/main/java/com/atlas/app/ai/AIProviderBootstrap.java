@@ -180,6 +180,16 @@ public final class AIProviderBootstrap {
                 )
         );
 
+        // OmniRoute: öncelik sırasıyla dener
+        OmniRouteProvider omni = new OmniRouteProvider();
+        omni.add(registry.get("groq"));
+        omni.add(registry.get("gemini"));
+        omni.add(registry.get("openrouter"));
+        omni.add(registry.get("cerebras"));
+        omni.add(registry.get("mistral"));
+        omni.add(registry.get("deepseek"));
+        registry.register(omni);
+
         return registry;
     }
 
