@@ -21,4 +21,5 @@
     <string name="menu_logs">Loglar</string>
     <string name="menu_settings">Ayarlar</string>
     <string name="menu_about">Hakkında</string>
+    <string name="atlas_a11y_description">ATLAS otomasyon icin ekran icerigini okur ve dokunma eylemlerini gerceklestirir.</string>
 </resources>

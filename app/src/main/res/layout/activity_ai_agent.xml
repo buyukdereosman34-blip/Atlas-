@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/etTaskInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="ATLAS'a bir görev ver (örn: Şu hatayı düzelt...)"
+        android:minLines="2"
+        android:gravity="top|start"
+        android:background="#333333"
+        android:padding="12dp"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#AAAAAA" />
+
+    <Button
+        android:id="@+id/btnStartAgent"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Ajanı Başlat"
+        android:layout_marginTop="8dp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="16dp"
+        android:background="#1E1E1E"
+        android:padding="8dp">
+
+        <TextView
+            android:id="@+id/tvAgentStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:textColor="#00FF00"
+            android:textIsSelectable="true"
+            android:freezesText="true"
+            android:text="ATLAS Agent Hazır.\n" />
+    </ScrollView>
+
+</LinearLayout>
