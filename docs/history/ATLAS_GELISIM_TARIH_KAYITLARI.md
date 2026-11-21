@@ -197,6 +197,18 @@ Groq model adı değişti (llama-3.3 kaldırıldı). Otomatik uyum sağlandı.
 
 ---
 
+
+## 2026-11-13-23:46 — Self-Development Çekirdeği TAMAMLANDI
+**Commit:** ad2f73d
+**Kazanımlar:**
+- `ApprovalCallback` eklendi (Test edilebilir, UI'a hazır).
+- Claude'un güvenlik denetimi sonrası API Key sızıntısı, `GIT_DIR` ve Path Traversal açıkları kapatıldı.
+- `maxAttempts=4` ve `StuckDetector` limitleri senkronize edildi.
+- REJECTED durumu eklendi.
+- Testler yeşil (BUILD SUCCESSFUL).
+**Sonraki Adım:** AAPT2 (aarch64) çözümü ve UI (DevTerminal) entegrasyonu.
+---
+
 ## SIRADAKİ HEDEFLER (Yarın)
 
 ### P0 — Approval Mekanizması
