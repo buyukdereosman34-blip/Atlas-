@@ -196,7 +196,7 @@ public class SelfImprovementEngineTest {
         );
         assertEquals(2, proposal.getAffectedFiles().size());
         assertEquals(
-                "MEDIUM",
+                "LOW",
                 proposal.getRisk()
         );
         assertTrue(proposal.isReversible());

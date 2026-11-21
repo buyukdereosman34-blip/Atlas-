@@ -19,6 +19,13 @@ public class RealGeminiProposalTest {
     @Test
     public void geminiCanGenerateRealChangeProposal() {
 
+        String apiKey = System.getenv("ATLAS_AI_GEMINI_API_KEY");
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            System.out.println("[SKIP] Gemini API key yok, test atlaniyor");
+            return;
+        }
+
+
         AIProviderRouter router =
                 AIProviderBootstrap.createRouter();
 
