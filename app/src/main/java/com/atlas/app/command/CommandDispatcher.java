@@ -71,9 +71,34 @@ public class CommandDispatcher {
                 break;
 
             default:
-                executeShell(command);
+                if (command.toLowerCase().startsWith("tool ")) {
+                    executeToolCommand(command);
+                } else {
+                    executeShell(command);
+                }
                 break;
         }
+    }
+
+    private void executeToolCommand(String command) {
+        if (runtime == null) {
+            output.print("Runtime bagli degil");
+            return;
+        }
+        String[] parts = command.trim().split("\\s+");
+        if (parts.length < 3) {
+            output.print("Usage: tool <name> <action> [args...]");
+            return;
+        }
+        String toolName = parts[1];
+        String action = parts[2];
+        String[] args = new String[Math.max(0, parts.length - 3)];
+        if (parts.length > 3) {
+            System.arraycopy(parts, 3, args, 0, parts.length - 3);
+        }
+        com.atlas.app.tool.ToolResult r = runtime.executeTool(toolName, action, args);
+        output.print(r.output);
+        logger.info("Tool: " + toolName + "/" + action + " -> " + r.code);
     }
 
     private void executeShell(String command) {
